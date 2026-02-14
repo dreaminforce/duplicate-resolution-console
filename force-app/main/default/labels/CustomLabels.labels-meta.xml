@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">
+  <labels>
+    <fullName>OpenAI_Hardcoded_Endpoint</fullName>
+    <categories>AI_Dedupe</categories>
+    <language>en_US</language>
+    <protected>false</protected>
+    <shortDescription>OpenAI Hardcoded Endpoint</shortDescription>
+    <value>https://api.openai.com/v1/responses</value>
+  </labels>
+  <labels>
+    <fullName>OpenAI_Hardcoded_API_Key</fullName>
+    <categories>AI_Dedupe</categories>
+    <language>en_US</language>
+    <protected>false</protected>
+    <shortDescription>OpenAI Hardcoded API Key</shortDescription>
+    <value>REPLACE_ME</value>
+  </labels>
+</CustomLabels>
