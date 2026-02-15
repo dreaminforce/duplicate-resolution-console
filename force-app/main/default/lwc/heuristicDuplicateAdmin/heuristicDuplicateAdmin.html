@@ -1,0 +1,141 @@
+<template>
+  <lightning-card class="admin-card">
+    <div class="hero">
+      <div>
+        <p class="eyebrow">Heuristic Duplicate Scanner</p>
+        <h1 class="title">Manual Admin Scan (Any Object, Same-Object Matching)</h1>
+      </div>
+      <div class="hero-actions">
+        <lightning-button label="Refresh" onclick={handleRefresh}></lightning-button>
+        <template if:true={showCancelButton}>
+          <lightning-button
+            label="Cancel Running Scan"
+            variant="destructive-text"
+            onclick={handleCancel}
+            disabled={loading}
+          ></lightning-button>
+        </template>
+      </div>
+    </div>
+
+    <section class="controls">
+      <lightning-combobox
+        name="objectPicker"
+        label="Object"
+        value={selectedObject}
+        options={objectOptions}
+        onchange={handleObjectChange}
+      ></lightning-combobox>
+      <lightning-input
+        type="number"
+        label="Max Records"
+        min="100"
+        max="5000"
+        value={maxRecords}
+        onchange={handleMaxRecordsChange}
+      ></lightning-input>
+      <lightning-input
+        type="number"
+        label="Score Threshold (0-100)"
+        min="0"
+        max="100"
+        value={scoreThreshold}
+        onchange={handleThresholdChange}
+      ></lightning-input>
+      <lightning-input
+        type="checkbox"
+        label="Clear previous results for selected object"
+        checked={clearPreviousFlags}
+        onchange={handleClearFlagsChange}
+      ></lightning-input>
+      <lightning-button
+        label="Run Duplicate Scan"
+        variant="brand"
+        onclick={handleRunNow}
+        disabled={disableRunButton}
+      ></lightning-button>
+    </section>
+
+    <template if:true={loading}>
+      <div class="loading-shell">
+        <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+      </div>
+    </template>
+
+    <template if:true={hasStatus}>
+      <section class="status-panel">
+        <div class="status-header">
+          <h2>Selected Scan: {scanStatus.scanName}</h2>
+          <span class={statusBadgeClass}>{scanStatus.status}</span>
+        </div>
+        <div class="metrics">
+          <div class="metric"><span>Object</span><strong>{scanStatus.objectNameLabel}</strong></div>
+          <div class="metric"><span>Created</span><strong>{scanStatus.createdDateLabel}</strong></div>
+          <div class="metric"><span>Started</span><strong>{scanStatus.startedAtLabel}</strong></div>
+          <div class="metric"><span>Completed</span><strong>{scanStatus.completedAtLabel}</strong></div>
+          <div class="metric"><span>Last Heartbeat</span><strong>{scanStatus.heartbeatLabel}</strong></div>
+          <div class="metric"><span>Processed / Total</span><strong>{scanStatus.processedRecords} / {scanStatus.totalRecords}</strong></div>
+          <div class="metric"><span>Candidate Pairs</span><strong>{scanStatus.candidatePairs}</strong></div>
+          <div class="metric"><span>Flagged Records</span><strong>{scanStatus.flaggedRecords}</strong></div>
+          <div class="metric"><span>Flagged Groups</span><strong>{scanStatus.flaggedGroups}</strong></div>
+          <div class="metric"><span>Threshold</span><strong>{scanStatus.threshold}</strong></div>
+          <div class="metric"><span>Max Records</span><strong>{scanStatus.maxRecords}</strong></div>
+        </div>
+        <template if:true={scanStatus.errorMessage}>
+          <p class="error-text">{scanStatus.errorMessage}</p>
+        </template>
+      </section>
+    </template>
+
+    <section class="recent-section">
+      <h2>Recent Scans</h2>
+      <template if:true={hasRecentScans}>
+        <div class="recent-list">
+          <template for:each={recentScans} for:item="scan">
+            <button
+              key={scan.scanId}
+              class="recent-item"
+              data-scan-id={scan.scanId}
+              onclick={handleSelectRecent}
+            >
+              <span class="scan-name">{scan.scanName}</span>
+              <span class="scan-meta">{scan.objectNameLabel}</span>
+              <span class="scan-meta">{scan.createdDateLabel}</span>
+              <span class="scan-meta">{scan.statusLabel}</span>
+              <span class="scan-meta">Groups: {scan.flaggedGroups} | Records: {scan.flaggedRecords}</span>
+            </button>
+          </template>
+        </div>
+      </template>
+      <template if:false={hasRecentScans}>
+        <p class="empty-text">No scans found yet.</p>
+      </template>
+    </section>
+
+    <section class="groups-section">
+      <h2>Flagged Duplicate Groups</h2>
+      <template if:true={hasGroups}>
+        <lightning-accordion allow-multiple-sections-open>
+          <template for:each={groups} for:item="group">
+            <lightning-accordion-section
+              key={group.groupKey}
+              name={group.groupKey}
+              label={group.sectionLabel}
+            >
+              <p class="group-summary">{group.summary}</p>
+              <lightning-datatable
+                key-field="recordId"
+                data={group.records}
+                columns={groupColumns}
+                hide-checkbox-column
+              ></lightning-datatable>
+            </lightning-accordion-section>
+          </template>
+        </lightning-accordion>
+      </template>
+      <template if:false={hasGroups}>
+        <p class="empty-text">No flagged groups for this scan.</p>
+      </template>
+    </section>
+  </lightning-card>
+</template>

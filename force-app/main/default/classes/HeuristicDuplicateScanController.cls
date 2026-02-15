@@ -1,0 +1,36 @@
+public with sharing class HeuristicDuplicateScanController {
+  @AuraEnabled(cacheable=true)
+  public static List<HeuristicDuplicateScanService.ObjectOption> getObjectOptions() {
+    return HeuristicDuplicateScanService.getObjectOptions();
+  }
+
+  @AuraEnabled
+  public static Id startScan(
+    String objectApiName,
+    Integer maxRecords,
+    Integer scoreThreshold,
+    Boolean clearPreviousFlags
+  ) {
+    return HeuristicDuplicateScanService.startScan(objectApiName, maxRecords, scoreThreshold, clearPreviousFlags);
+  }
+
+  @AuraEnabled
+  public static HeuristicDuplicateScanService.ScanStatus getScanStatus(Id scanId) {
+    return HeuristicDuplicateScanService.getScanStatus(scanId);
+  }
+
+  @AuraEnabled
+  public static List<HeuristicDuplicateScanService.ScanStatus> getRecentScans(Integer maxRows) {
+    return HeuristicDuplicateScanService.getRecentScans(maxRows);
+  }
+
+  @AuraEnabled
+  public static List<HeuristicDuplicateScanService.DuplicateGroup> getGroupsForScan(Id scanId, Integer maxGroups) {
+    return HeuristicDuplicateScanService.getGroupsForScan(scanId, maxGroups);
+  }
+
+  @AuraEnabled
+  public static HeuristicDuplicateScanService.ActionResult cancelScan(Id scanId) {
+    return HeuristicDuplicateScanService.cancelScan(scanId);
+  }
+}

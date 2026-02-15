@@ -1,6 +1,7 @@
 # Salesforce AI Dedupe Package (Starter)
 
 This project now includes a first implementation of an AI-assisted duplicate resolution workbench for Salesforce.
+It also includes a separate deterministic duplicate scanner that does not depend on Salesforce Matching Rules/Duplicate Rules and supports scanning any selected object.
 
 ## What it does
 
@@ -22,6 +23,17 @@ This project now includes a first implementation of an AI-assisted duplicate res
 - `force-app/main/default/lwc/aiDuplicateWorkbench/*`
 - `force-app/main/default/tabs/AI_Duplicate_Workbench.tab-meta.xml`
 - `force-app/main/default/permissionsets/AI_Duplicate_Workbench.permissionset-meta.xml`
+- `force-app/main/default/classes/HeuristicDuplicateScanController.cls`
+- `force-app/main/default/classes/HeuristicDuplicateScanService.cls`
+- `force-app/main/default/classes/HeuristicDuplicateScanBatch.cls`
+- `force-app/main/default/classes/HeuristicDuplicateScanServiceTest.cls`
+- `force-app/main/default/lwc/heuristicDuplicateAdmin/*`
+- `force-app/main/default/tabs/Heuristic_Duplicate_Admin.tab-meta.xml`
+- `force-app/main/default/permissionsets/Heuristic_Duplicate_Admin.permissionset-meta.xml`
+- `force-app/main/default/objects/Heuristic_Duplicate_Scan__c/*`
+- `force-app/main/default/objects/Heuristic_Duplicate_Group__c/*`
+- `force-app/main/default/objects/Heuristic_Duplicate_Member__c/*`
+- `force-app/main/default/objects/Account/fields/Heuristic_Duplicate_*`
 
 ## OpenAI setup
 
@@ -53,3 +65,9 @@ sf org assign permset --name AI_Duplicate_Workbench --target-org <alias>
 - Merge action is only enabled for merge-capable standard objects (`Account`, `Contact`, `Lead`, `Case`).
 - If AI analysis fails for a set, deterministic fallback ranking is used so users can still proceed.
 - The LWC field matrix is intentionally compact and scrollable to handle wide record comparisons.
+- The **Heuristic Duplicate Admin** tab runs on button-click and scans one selected object at a time (for example Account-to-Account, Contact-to-Contact, Lead-to-Lead).
+- Results are stored in dedicated custom objects:
+  - `Heuristic_Duplicate_Scan__c`
+  - `Heuristic_Duplicate_Group__c`
+  - `Heuristic_Duplicate_Member__c`
+- This scanner is fully separate from `DuplicateRecordSet`/`DuplicateRecordItem` and from Salesforce MR/DR behavior.
