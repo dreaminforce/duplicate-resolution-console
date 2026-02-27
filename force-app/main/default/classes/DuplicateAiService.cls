@@ -446,7 +446,7 @@ public with sharing class DuplicateAiService {
     setResult.records = uiRecords;
     setResult.summary = shouldRunAi
       ? 'AI processing in progress for this set.'
-      : 'Raw duplicate records view. Use AI Analyze All Sets for ranking and merge recommendations.';
+      : 'Raw duplicate rule set view. Use Analyze All Sets (AI) for ranking and merge recommendations.';
 
     if (shouldRunAi) {
       try {

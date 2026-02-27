@@ -44,16 +44,43 @@ public with sharing class HeuristicDuplicateScanService {
   }
 
   public class DuplicateGroup {
+    @AuraEnabled public Id groupId;
     @AuraEnabled public String groupKey;
+    @AuraEnabled public String objectApiName;
     @AuraEnabled public Integer recordCount;
     @AuraEnabled public Integer topScore;
     @AuraEnabled public String summary;
     @AuraEnabled public List<GroupRecord> records;
   }
 
+  public class GroupDetailRecord {
+    @AuraEnabled public String recordId;
+    @AuraEnabled public String displayValue;
+    @AuraEnabled public Integer score;
+    @AuraEnabled public String reason;
+    @AuraEnabled public Map<String, String> fields;
+  }
+
+  public class GroupDetail {
+    @AuraEnabled public Id groupId;
+    @AuraEnabled public String groupKey;
+    @AuraEnabled public String objectApiName;
+    @AuraEnabled public String objectLabel;
+    @AuraEnabled public String summary;
+    @AuraEnabled public List<String> fieldNames;
+    @AuraEnabled public List<GroupDetailRecord> records;
+  }
+
   public class ActionResult {
     @AuraEnabled public Boolean success;
     @AuraEnabled public String message;
+    @AuraEnabled public Integer processedCount;
+    @AuraEnabled public List<String> errors;
+  }
+
+  private class QueryResultContext {
+    public Map<Id, SObject> recordsById = new Map<Id, SObject>();
+    public List<String> queriedFieldNames = new List<String>();
   }
 
   public static List<ObjectOption> getObjectOptions() {
@@ -207,7 +234,7 @@ public with sharing class HeuristicDuplicateScanService {
     Integer groupLimit = maxGroups == null || maxGroups <= 0 ? 25 : Math.min(maxGroups, 60);
 
     List<Heuristic_Duplicate_Group__c> groups = [
-      SELECT Id, Group_Key__c, Record_Count__c, Top_Score__c, Summary__c
+      SELECT Id, Group_Key__c, Object_Api_Name__c, Record_Count__c, Top_Score__c, Summary__c
       FROM Heuristic_Duplicate_Group__c
       WHERE Scan__c = :scanId
       ORDER BY Top_Score__c DESC, Record_Count__c DESC, CreatedDate DESC
@@ -224,7 +251,9 @@ public with sharing class HeuristicDuplicateScanService {
       groupIds.add(source.Id);
 
       DuplicateGroup dto = new DuplicateGroup();
+      dto.groupId = source.Id;
       dto.groupKey = source.Group_Key__c;
+      dto.objectApiName = source.Object_Api_Name__c;
       dto.recordCount = toInteger(source.Record_Count__c);
       dto.topScore = toInteger(source.Top_Score__c);
       dto.summary = source.Summary__c;
@@ -262,6 +291,89 @@ public with sharing class HeuristicDuplicateScanService {
     }
 
     return response;
+  }
+
+  public static GroupDetail getGroupDetail(Id groupId) {
+    if (groupId == null) {
+      throw new AuraHandledException('groupId is required.');
+    }
+
+    List<Heuristic_Duplicate_Group__c> groups = [
+      SELECT Id, Group_Key__c, Object_Api_Name__c, Summary__c, Scan__r.Object_Label__c
+      FROM Heuristic_Duplicate_Group__c
+      WHERE Id = :groupId
+      LIMIT 1
+    ];
+    if (groups.isEmpty()) {
+      throw new AuraHandledException('Group not found: ' + String.valueOf(groupId));
+    }
+
+    Heuristic_Duplicate_Group__c groupRow = groups[0];
+    String objectApiName = groupRow.Object_Api_Name__c;
+    if (String.isBlank(objectApiName) || !Schema.getGlobalDescribe().containsKey(objectApiName)) {
+      throw new AuraHandledException('Group has unknown object API name: ' + objectApiName);
+    }
+
+    List<Heuristic_Duplicate_Member__c> members = [
+      SELECT Record_Id__c, Display_Value__c, Score__c, Reason__c
+      FROM Heuristic_Duplicate_Member__c
+      WHERE Group__c = :groupId
+      ORDER BY Score__c DESC, Display_Value__c ASC
+      LIMIT 5000
+    ];
+
+    Set<Id> recordIds = new Set<Id>();
+    for (Heuristic_Duplicate_Member__c member : members) {
+      Id parsed = parseRecordId(member.Record_Id__c);
+      if (parsed != null) {
+        recordIds.add(parsed);
+      }
+    }
+
+    QueryResultContext queryContext = queryAllFieldsForRecords(objectApiName, recordIds);
+    List<String> allFieldNames = queryContext.queriedFieldNames;
+    Set<String> queriedFieldSet = new Set<String>();
+    for (String fieldName : allFieldNames) {
+      queriedFieldSet.add(fieldName.toLowerCase());
+    }
+
+    GroupDetail detail = new GroupDetail();
+    detail.groupId = groupRow.Id;
+    detail.groupKey = groupRow.Group_Key__c;
+    detail.objectApiName = objectApiName;
+    detail.objectLabel = groupRow.Scan__r == null ? objectApiName : groupRow.Scan__r.Object_Label__c;
+    detail.summary = groupRow.Summary__c;
+    detail.fieldNames = allFieldNames;
+    detail.records = new List<GroupDetailRecord>();
+
+    for (Heuristic_Duplicate_Member__c member : members) {
+      Id parsed = parseRecordId(member.Record_Id__c);
+      SObject row = parsed == null ? null : queryContext.recordsById.get(parsed);
+      Map<String, String> flatFields = row == null ? new Map<String, String>() : flattenFields(row, allFieldNames);
+
+      GroupDetailRecord detailRow = new GroupDetailRecord();
+      detailRow.recordId = member.Record_Id__c;
+      detailRow.displayValue = !String.isBlank(member.Display_Value__c)
+        ? member.Display_Value__c
+        : deriveDisplayValue(row, queriedFieldSet, member.Record_Id__c);
+      detailRow.score = toInteger(member.Score__c);
+      detailRow.reason = member.Reason__c;
+      detailRow.fields = flatFields;
+      detail.records.add(detailRow);
+    }
+
+    return detail;
+  }
+
+  public static ActionResult mergeRecords(String objectApiName, Id parentRecordId, List<Id> childRecordIds) {
+    DuplicateAiService.ActionResult source = DuplicateAiService.mergeRecords(objectApiName, parentRecordId, childRecordIds);
+
+    ActionResult result = new ActionResult();
+    result.success = source.success;
+    result.message = source.message;
+    result.processedCount = source.processedCount;
+    result.errors = source.errors;
+    return result;
   }
 
   public static ActionResult cancelScan(Id scanId) {
@@ -440,6 +552,184 @@ public with sharing class HeuristicDuplicateScanService {
       return ((Decimal) raw).intValue();
     }
     return Integer.valueOf(String.valueOf(raw));
+  }
+
+  private static QueryResultContext queryAllFieldsForRecords(String objectApiName, Set<Id> ids) {
+    QueryResultContext result = new QueryResultContext();
+    if (ids == null || ids.isEmpty()) {
+      return result;
+    }
+
+    Map<String, Schema.SObjectField> fieldMap = Schema.getGlobalDescribe().get(objectApiName).getDescribe().fields.getMap();
+    List<String> allQueryableFields = buildAllQueryableFieldList(fieldMap);
+    allQueryableFields = dedupeFieldNamesCaseInsensitive(allQueryableFields);
+
+    try {
+      result.recordsById =
+        new Map<Id, SObject>(Database.query('SELECT FIELDS(ALL) FROM ' + objectApiName + ' WHERE Id IN :ids'));
+      result.queriedFieldNames = allQueryableFields;
+      return result;
+    } catch (Exception ignored) {
+      try {
+        String allFieldSoql = 'SELECT ' + String.join(allQueryableFields, ',') + ' FROM ' + objectApiName + ' WHERE Id IN :ids';
+        result.recordsById = new Map<Id, SObject>(Database.query(allFieldSoql));
+        result.queriedFieldNames = allQueryableFields;
+        return result;
+      } catch (Exception secondFailure) {
+        List<String> fields = buildFallbackFieldList(fieldMap);
+        fields = dedupeFieldNamesCaseInsensitive(fields);
+        try {
+          String fallbackSoql = 'SELECT ' + String.join(fields, ',') + ' FROM ' + objectApiName + ' WHERE Id IN :ids';
+          result.recordsById = new Map<Id, SObject>(Database.query(fallbackSoql));
+          result.queriedFieldNames = fields;
+          return result;
+        } catch (Exception thirdFailure) {
+          result.recordsById = new Map<Id, SObject>(Database.query('SELECT Id FROM ' + objectApiName + ' WHERE Id IN :ids'));
+          result.queriedFieldNames = new List<String>{ 'Id' };
+          return result;
+        }
+      }
+    }
+  }
+
+  private static List<String> buildAllQueryableFieldList(Map<String, Schema.SObjectField> fieldMap) {
+    List<String> fields = new List<String>();
+    Set<String> selectedCanonical = new Set<String>();
+
+    addFieldIfQueryable('Id', fieldMap, selectedCanonical, fields);
+
+    List<String> sortedAllFields = new List<String>(fieldMap.keySet());
+    sortedAllFields.sort();
+    for (String fieldName : sortedAllFields) {
+      addFieldIfQueryable(fieldName, fieldMap, selectedCanonical, fields);
+    }
+
+    return fields;
+  }
+
+  private static List<String> buildFallbackFieldList(Map<String, Schema.SObjectField> fieldMap) {
+    List<String> fields = new List<String>();
+    Set<String> selectedCanonical = new Set<String>();
+
+    for (String preferred : new List<String>{ 'Id', 'Name', 'Subject', 'CreatedDate', 'LastModifiedDate' }) {
+      addFieldIfQueryable(preferred, fieldMap, selectedCanonical, fields);
+    }
+
+    List<String> sortedAllFields = new List<String>(fieldMap.keySet());
+    sortedAllFields.sort();
+    for (String fieldName : sortedAllFields) {
+      if (fields.size() >= 120) {
+        break;
+      }
+      addFieldIfQueryable(fieldName, fieldMap, selectedCanonical, fields);
+    }
+
+    if (!selectedCanonical.contains('id') && fieldMap.containsKey('Id')) {
+      fields.add('Id');
+    }
+    return fields;
+  }
+
+  private static void addFieldIfQueryable(
+    String fieldName,
+    Map<String, Schema.SObjectField> fieldMap,
+    Set<String> selectedCanonical,
+    List<String> output
+  ) {
+    if (String.isBlank(fieldName) || !fieldMap.containsKey(fieldName)) {
+      return;
+    }
+    String canonical = fieldName.toLowerCase();
+    if (selectedCanonical.contains(canonical)) {
+      return;
+    }
+
+    Schema.DescribeFieldResult d = fieldMap.get(fieldName).getDescribe();
+    if (!d.isAccessible() || d.getType() == Schema.DisplayType.Base64) {
+      return;
+    }
+
+    selectedCanonical.add(canonical);
+    output.add(fieldName);
+  }
+
+  private static List<String> dedupeFieldNamesCaseInsensitive(List<String> fieldNames) {
+    List<String> out = new List<String>();
+    Set<String> canonical = new Set<String>();
+    for (String fieldName : fieldNames) {
+      if (String.isBlank(fieldName)) {
+        continue;
+      }
+      String key = fieldName.toLowerCase();
+      if (canonical.contains(key)) {
+        continue;
+      }
+      canonical.add(key);
+      out.add(fieldName);
+    }
+    if (!canonical.contains('id')) {
+      out.add(0, 'Id');
+    }
+    return out;
+  }
+
+  private static Map<String, String> flattenFields(SObject row, List<String> allFieldNames) {
+    Map<String, String> out = new Map<String, String>();
+    for (String fieldName : allFieldNames) {
+      Object value = safeGetField(row, fieldName);
+      out.put(fieldName, formatValue(value));
+    }
+    return out;
+  }
+
+  private static String deriveDisplayValue(SObject row, Set<String> queriedFieldSet, String fallbackId) {
+    if (row == null) {
+      return fallbackId;
+    }
+    Object nameValue = queriedFieldSet.contains('name') ? safeGetField(row, 'Name') : null;
+    if (nameValue != null) {
+      return String.valueOf(nameValue);
+    }
+    Object subjectValue = queriedFieldSet.contains('subject') ? safeGetField(row, 'Subject') : null;
+    if (subjectValue != null) {
+      return String.valueOf(subjectValue);
+    }
+    return String.isBlank(fallbackId) ? String.valueOf(row.get('Id')) : fallbackId;
+  }
+
+  private static Object safeGetField(SObject row, String fieldName) {
+    if (row == null) {
+      return null;
+    }
+    try {
+      return row.get(fieldName);
+    } catch (Exception ignored) {
+      return null;
+    }
+  }
+
+  private static String formatValue(Object value) {
+    if (value == null) {
+      return '';
+    }
+    if (value instanceof Date) {
+      return ((Date) value).format();
+    }
+    if (value instanceof Datetime) {
+      return ((Datetime) value).format('yyyy-MM-dd HH:mm');
+    }
+    return String.valueOf(value);
+  }
+
+  private static Id parseRecordId(String value) {
+    if (String.isBlank(value)) {
+      return null;
+    }
+    try {
+      return (Id) value;
+    } catch (Exception ignored) {
+      return null;
+    }
   }
 
   private class ObjectOptionSorter implements Comparator<ObjectOption> {

@@ -30,6 +30,20 @@ public with sharing class HeuristicDuplicateScanController {
   }
 
   @AuraEnabled
+  public static HeuristicDuplicateScanService.GroupDetail getGroupDetail(Id groupId) {
+    return HeuristicDuplicateScanService.getGroupDetail(groupId);
+  }
+
+  @AuraEnabled
+  public static HeuristicDuplicateScanService.ActionResult mergeRecords(
+    String objectApiName,
+    Id parentRecordId,
+    List<Id> childRecordIds
+  ) {
+    return HeuristicDuplicateScanService.mergeRecords(objectApiName, parentRecordId, childRecordIds);
+  }
+
+  @AuraEnabled
   public static HeuristicDuplicateScanService.ActionResult cancelScan(Id scanId) {
     return HeuristicDuplicateScanService.cancelScan(scanId);
   }

@@ -3,8 +3,8 @@
     <template if:true={showSummaryView}>
       <div class="hero">
         <div>
-          <p class="eyebrow">AI Duplicate Workbench</p>
-          <h1 class="title">Resolve duplicate sets with ranked merge guidance</h1>
+          <p class="eyebrow">Matching &amp; Duplicate Rule Workbench</p>
+          <h1 class="title">Resolve duplicate rule sets with ranked merge guidance</h1>
         </div>
         <div class="toolbar">
           <lightning-combobox
@@ -15,15 +15,15 @@
             onchange={handleObjectChange}
           ></lightning-combobox>
           <div class="toolbar-actions">
-            <lightning-button label="View Duplicates" onclick={handleViewDuplicates}></lightning-button>
-            <lightning-button label="AI Analyze All Sets" variant="brand" onclick={handleAnalyzeAi}></lightning-button>
+            <lightning-button label="View Duplicate Rule Sets" onclick={handleViewDuplicates}></lightning-button>
+            <lightning-button label="Analyze All Sets (AI)" variant="brand" onclick={handleAnalyzeAi}></lightning-button>
           </div>
         </div>
       </div>
 
       <template if:true={loading}>
         <div class="loading-shell">
-          <lightning-spinner alternative-text="Analyzing duplicates" size="small"></lightning-spinner>
+          <lightning-spinner alternative-text="Analyzing duplicate rule sets" size="small"></lightning-spinner>
         </div>
       </template>
 
@@ -77,7 +77,7 @@
                   onclick={handleOpenDetail}
                 ></lightning-button>
                 <lightning-button
-                  label="AI Analyze Set"
+                  label="Analyze Set (AI)"
                   variant="brand-outline"
                   data-set-id={setItem.duplicateRecordSetId}
                   onclick={handleAnalyzeSingleSetAi}

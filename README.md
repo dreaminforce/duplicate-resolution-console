@@ -7,7 +7,7 @@ It also includes a separate deterministic duplicate scanner that does not depend
 
 1. User runs standard Salesforce duplicate jobs manually.
 2. `DuplicateRecordItem` and `DuplicateRecordSet` data is read by Apex.
-3. User opens **AI Duplicate Workbench** and selects an object.
+3. User opens **Matching & Duplicate Rule Workbench** and selects an object.
 4. The app analyzes duplicate sets for that object.
 5. For each set, AI proposes:
    - canonical parent record

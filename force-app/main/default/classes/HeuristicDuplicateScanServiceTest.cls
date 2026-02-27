@@ -72,6 +72,12 @@ private class HeuristicDuplicateScanServiceTest {
     System.assertEquals(1, viewGroups.size());
     System.assertEquals(2, viewGroups[0].recordCount);
     System.assert(viewGroups[0].topScore >= 75);
+
+    HeuristicDuplicateScanService.GroupDetail detail = HeuristicDuplicateScanController.getGroupDetail(viewGroups[0].groupId);
+    System.assertEquals(viewGroups[0].groupKey, detail.groupKey);
+    System.assertEquals('Account', detail.objectApiName);
+    System.assertEquals(2, detail.records.size());
+    System.assert(!detail.fieldNames.isEmpty());
   }
 
   @IsTest
@@ -146,5 +152,24 @@ private class HeuristicDuplicateScanServiceTest {
     HeuristicDuplicateScanService.ActionResult cancelResult = HeuristicDuplicateScanController.cancelScan(scan.Id);
     System.assertEquals(false, cancelResult.success);
     System.assert(cancelResult.message.contains('No async job'));
+  }
+
+  @IsTest
+  static void mergeRecords_forAccount_mergesSelectedChildren() {
+    Account parent = new Account(Name = 'Merge Parent', Phone = '2125550101');
+    Account child = new Account(Name = 'Merge Child', Phone = '2125550101');
+    insert new List<Account>{ parent, child };
+
+    HeuristicDuplicateScanService.ActionResult result = HeuristicDuplicateScanController.mergeRecords(
+      'Account',
+      parent.Id,
+      new List<Id>{ child.Id }
+    );
+
+    System.assertEquals(true, result.success, result.message);
+    System.assertEquals(1, result.processedCount);
+
+    System.assertEquals(1, [SELECT COUNT() FROM Account WHERE Id = :parent.Id]);
+    System.assertEquals(0, [SELECT COUNT() FROM Account WHERE Id = :child.Id]);
   }
 }

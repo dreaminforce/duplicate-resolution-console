@@ -16,7 +16,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
   @track warnings = [];
   @track summary;
   @track detailSet;
-  @track modeLabel = 'View Duplicates';
+  @track modeLabel = 'View Duplicate Rule Sets';
   @track parentPickerOpen = false;
   @track parentOptions = [];
   @track selectedParentCandidate;
@@ -61,7 +61,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
         this.selectedObject = this.objectOptions[0].value;
       }
     } catch (error) {
-      this.notifyError('Failed to load duplicate objects', error);
+      this.notifyError('Failed to load matching/duplicate rule objects', error);
     } finally {
       this.loading = false;
     }
@@ -94,12 +94,12 @@ export default class AiDuplicateWorkbench extends LightningElement {
         totalSets: result.totalSets,
         totalFields: result.sets && result.sets.length ? (result.sets[0].fieldNames || []).length : 0
       };
-      this.modeLabel = runAi ? 'AI Analyze All Sets' : 'View Duplicates';
+      this.modeLabel = runAi ? 'Analyze All Sets (AI)' : 'View Duplicate Rule Sets';
       this.warnings = result.warnings || [];
 
       this.sets = (result.sets || []).map((setItem) => this.mapSet(setItem));
     } catch (error) {
-      this.notifyError(runAi ? 'Failed to run AI analysis' : 'Failed to load duplicate sets', error);
+      this.notifyError(runAi ? 'Failed to run AI analysis' : 'Failed to load duplicate rule sets', error);
     } finally {
       this.loading = false;
     }
@@ -137,7 +137,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
       if (this.detailSet && String(this.detailSet.duplicateRecordSetId) === String(setId)) {
         this.detailSet = mapped;
       }
-      this.notify('AI set analysis complete', `${mapped.duplicateRecordSetName} updated.`, 'success');
+      this.notify('Set analysis complete', `${mapped.duplicateRecordSetName} updated.`, 'success');
     } catch (error) {
       this.notifyError('Failed to analyze set with AI', error);
     } finally {
