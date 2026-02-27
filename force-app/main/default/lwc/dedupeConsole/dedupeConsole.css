@@ -1,0 +1,38 @@
+:host {
+  display: block;
+}
+
+.console-card {
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.console-header {
+  border-bottom: 1px solid #d8dde6;
+  padding: 0.9rem 1rem 0.8rem;
+}
+
+.eyebrow {
+  color: #1f5f8e;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08rem;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.title {
+  color: #102a43;
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0.15rem 0 0;
+}
+
+.subtitle {
+  color: #54647a;
+  font-size: 0.82rem;
+  margin: 0.28rem 0 0;
+}
+
+.console-body {
+  padding: 0.75rem;
+}

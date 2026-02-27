@@ -13,6 +13,10 @@
     <apexClass>HeuristicDuplicateScanBatch</apexClass>
     <enabled>true</enabled>
   </classAccesses>
+  <applicationVisibilities>
+    <application>Duplicate_Resolution</application>
+    <visible>true</visible>
+  </applicationVisibilities>
 
   <fieldPermissions>
     <editable>true</editable>
@@ -204,6 +208,10 @@
     <object>Heuristic_Duplicate_Member__c</object>
     <viewAllRecords>false</viewAllRecords>
   </objectPermissions>
+  <tabSettings>
+    <tab>Duplicate_Resolution_Console</tab>
+    <visibility>Visible</visibility>
+  </tabSettings>
   <tabSettings>
     <tab>Heuristic_Duplicate_Admin</tab>
     <visibility>Visible</visibility>

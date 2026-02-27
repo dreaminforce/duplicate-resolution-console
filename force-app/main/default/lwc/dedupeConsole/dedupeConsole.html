@@ -1,0 +1,20 @@
+<template>
+  <lightning-card class="console-card">
+    <div class="console-header">
+      <p class="eyebrow">Duplicate Resolution</p>
+      <h1 class="title">Unified Workbench</h1>
+      <p class="subtitle">Use the tabs below to switch between AI-guided resolution and heuristic scanning.</p>
+    </div>
+
+    <div class="console-body">
+      <lightning-tabset active-tab-value="ai" variant="scoped">
+        <lightning-tab label="AI Duplicate Workbench" value="ai">
+          <c-ai-duplicate-workbench></c-ai-duplicate-workbench>
+        </lightning-tab>
+        <lightning-tab label="Heuristic Duplicate Admin" value="heuristic">
+          <c-heuristic-duplicate-admin></c-heuristic-duplicate-admin>
+        </lightning-tab>
+      </lightning-tabset>
+    </div>
+  </lightning-card>
+</template>

@@ -23,6 +23,9 @@ It also includes a separate deterministic duplicate scanner that does not depend
 - `force-app/main/default/lwc/aiDuplicateWorkbench/*`
 - `force-app/main/default/tabs/AI_Duplicate_Workbench.tab-meta.xml`
 - `force-app/main/default/permissionsets/AI_Duplicate_Workbench.permissionset-meta.xml`
+- `force-app/main/default/lwc/dedupeConsole/*`
+- `force-app/main/default/tabs/Duplicate_Resolution_Console.tab-meta.xml`
+- `force-app/main/default/applications/Duplicate_Resolution.app-meta.xml`
 - `force-app/main/default/classes/HeuristicDuplicateScanController.cls`
 - `force-app/main/default/classes/HeuristicDuplicateScanService.cls`
 - `force-app/main/default/classes/HeuristicDuplicateScanBatch.cls`

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomTab xmlns="http://soap.sforce.com/2006/04/metadata">
+  <description>Unified tab containing both AI and heuristic duplicate workflows.</description>
+  <label>Duplicate Resolution Console</label>
+  <lwcComponent>dedupeConsole</lwcComponent>
+  <motif>Custom67: Gears</motif>
+</CustomTab>
