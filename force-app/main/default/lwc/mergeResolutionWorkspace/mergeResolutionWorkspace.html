@@ -16,11 +16,9 @@
           </div>
           <div class="review-actions">
             <lightning-button label="Select Survivor" onclick={handleSelectSurvivor}></lightning-button>
-            <lightning-button
-              label="Close Review"
-              onclick={handleClose}
-              disabled={loading}
-            ></lightning-button>
+            <button class="back-link" type="button" onclick={handleClose} disabled={loading}>
+              Back to Field Comparison
+            </button>
             <lightning-button
               variant="brand"
               label="Execute Soft Merge"
@@ -29,6 +27,23 @@
             ></lightning-button>
           </div>
         </div>
+
+        <template if:true={hasRecordLinks}>
+          <div class="record-links">
+            <span class="record-links-label">Open Records</span>
+            <template for:each={proposal.records} for:item="recordCol">
+              <a
+                key={recordCol.recordId}
+                class="record-link"
+                href={recordCol.recordUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {recordCol.linkLabel}
+              </a>
+            </template>
+          </div>
+        </template>
 
         <div class="summary-grid">
           <article class="metric">
@@ -89,7 +104,7 @@
                           options={row.selectorOptions}
                           onchange={handleSelectionChange}
                         ></lightning-combobox>
-                        <p class="final-value">{row.selectedValue}</p>
+                        <p class="final-value" title={row.selectedValue}>{row.selectedDisplayValue}</p>
                       </td>
                       <td class="recommendation">
                         <p>{row.recommendationReason}</p>
@@ -97,7 +112,7 @@
                       </td>
                       <template for:each={row.values} for:item="valueCell">
                         <td key={valueCell.recordId} class={valueCell.cellClass}>
-                          <div>{valueCell.value}</div>
+                          <div title={valueCell.fullValue}>{valueCell.displayValue}</div>
                           <p class="meta-text">{valueCell.metaLabel}</p>
                         </td>
                       </template>
@@ -139,7 +154,7 @@
                           options={row.selectorOptions}
                           onchange={handleSelectionChange}
                         ></lightning-combobox>
-                        <p class="final-value">{row.selectedValue}</p>
+                        <p class="final-value" title={row.selectedValue}>{row.selectedDisplayValue}</p>
                       </td>
                       <td class="recommendation">
                         <p>{row.recommendationReason}</p>
@@ -147,7 +162,7 @@
                       </td>
                       <template for:each={row.values} for:item="valueCell">
                         <td key={valueCell.recordId} class={valueCell.cellClass}>
-                          <div>{valueCell.value}</div>
+                          <div title={valueCell.fullValue}>{valueCell.displayValue}</div>
                           <p class="meta-text">{valueCell.metaLabel}</p>
                         </td>
                       </template>
@@ -165,7 +180,7 @@
             <template for:each={proposal.previewFields} for:item="previewField">
               <article key={previewField.fieldApiName} class="preview-card">
                 <p class="preview-label">{previewField.fieldLabel}</p>
-                <p class="preview-value">{previewField.selectedValue}</p>
+                <p class="preview-value" title={previewField.selectedValue}>{previewField.selectedDisplayValue}</p>
               </article>
             </template>
           </div>

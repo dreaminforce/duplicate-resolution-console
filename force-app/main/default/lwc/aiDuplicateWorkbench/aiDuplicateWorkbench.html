@@ -128,64 +128,82 @@
           </div>
         </div>
 
-        <div class="set-actions detail-actions">
-          <template if:true={detailSet.canMergeUi}>
+        <template if:true={showDetailComparison}>
+          <div class="set-actions detail-actions">
+            <template if:true={detailSet.canMergeUi}>
+              <lightning-button
+                label="Select Survivor"
+                data-set-id={detailSet.duplicateRecordSetId}
+                onclick={handleSelectParentClick}
+              ></lightning-button>
+              <lightning-button
+                label="Review Merge"
+                variant="brand"
+                disabled={detailSet.mergeDisabled}
+                data-set-id={detailSet.duplicateRecordSetId}
+                onclick={handleReviewMerge}
+              ></lightning-button>
+            </template>
             <lightning-button
-              label="Select Survivor"
+              label="Delete Selected"
+              variant="destructive-text"
               data-set-id={detailSet.duplicateRecordSetId}
-              onclick={handleSelectParentClick}
+              onclick={handleDeleteClick}
             ></lightning-button>
-            <lightning-button
-              label="Review Merge"
-              variant="brand"
-              disabled={detailSet.mergeDisabled}
-              data-set-id={detailSet.duplicateRecordSetId}
-              onclick={handleReviewMerge}
-            ></lightning-button>
-          </template>
-          <lightning-button
-            label="Delete Selected"
-            variant="destructive-text"
+          </div>
+
+          <lightning-datatable
+            key-field="recordId"
+            data={detailSet.records}
+            columns={columns}
             data-set-id={detailSet.duplicateRecordSetId}
-            onclick={handleDeleteClick}
-          ></lightning-button>
-        </div>
+            onrowselection={handleRowSelection}
+          ></lightning-datatable>
 
-        <lightning-datatable
-          key-field="recordId"
-          data={detailSet.records}
-          columns={columns}
-          data-set-id={detailSet.duplicateRecordSetId}
-          onrowselection={handleRowSelection}
-        ></lightning-datatable>
+          <div class="record-links">
+            <span class="record-links-label">Open Records</span>
+            <template for:each={detailSet.recordLinks} for:item="recordLink">
+              <a
+                key={recordLink.recordId}
+                class="record-link"
+                href={recordLink.recordUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {recordLink.linkLabel}
+              </a>
+            </template>
+          </div>
 
-        <div class="matrix-wrap detail-matrix-wrap">
-          <table class="field-matrix">
-            <thead>
-              <tr>
-                <th>Field</th>
-                <template for:each={detailSet.records} for:item="recordCol">
-                  <th key={recordCol.recordId}>{recordCol.displayValue}</th>
-                </template>
-              </tr>
-            </thead>
-            <tbody>
-              <template for:each={detailSet.detailFieldRows} for:item="row">
-                <tr key={row.name}>
-                  <td class="field-name">{row.name}</td>
-                  <template for:each={row.values} for:item="val">
-                    <td key={val.recordId} class={val.cellClass}>{val.value}</td>
+          <div class="matrix-wrap detail-matrix-wrap">
+            <table class="field-matrix">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <template for:each={detailSet.records} for:item="recordCol">
+                    <th key={recordCol.recordId}>{recordCol.displayValue}</th>
                   </template>
                 </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                <template for:each={detailSet.detailFieldRows} for:item="row">
+                  <tr key={row.name}>
+                    <td class="field-name">{row.name}</td>
+                    <template for:each={row.values} for:item="val">
+                      <td key={val.recordId} class={val.cellClass} title={val.fullValue}>{val.displayValue}</td>
+                    </template>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
 
         <c-merge-resolution-workspace
           proposal={mergeReview}
           loading={mergeLoading}
           executing={mergeExecuting}
+          visible={mergeReviewVisible}
           onselectionchange={handleMergeSelectionChange}
           onexecute={handleExecuteMerge}
           onclose={handleMergeReviewClose}

@@ -49,6 +49,56 @@
   justify-content: flex-end;
 }
 
+.back-link {
+  background: none;
+  border: 0;
+  color: #0b5cab;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.45rem 0.2rem;
+  text-decoration: underline;
+}
+
+.back-link:disabled {
+  color: #8aa1b8;
+  cursor: default;
+  text-decoration: none;
+}
+
+.record-links {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.9rem;
+}
+
+.record-links-label {
+  color: #627d98;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.record-link {
+  background: rgba(11, 92, 171, 0.08);
+  border: 1px solid rgba(11, 92, 171, 0.14);
+  border-radius: 999px;
+  color: #0b5cab;
+  font-size: 0.74rem;
+  max-width: 18rem;
+  overflow: hidden;
+  padding: 0.18rem 0.65rem;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-link:hover {
+  border-color: rgba(11, 92, 171, 0.28);
+  text-decoration: underline;
+}
+
 .summary-grid {
   display: grid;
   gap: 0.7rem;
@@ -103,12 +153,15 @@
   border: 1px solid rgba(16, 42, 67, 0.1);
   border-radius: 0.6rem;
   max-height: 360px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .merge-table {
   border-collapse: collapse;
   min-width: 100%;
+  table-layout: fixed;
+  width: 100%;
 }
 
 .merge-table th,
@@ -118,7 +171,9 @@
   padding: 0.45rem;
   text-align: left;
   vertical-align: top;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .field-name {

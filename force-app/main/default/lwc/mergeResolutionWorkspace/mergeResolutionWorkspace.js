@@ -4,13 +4,14 @@ export default class MergeResolutionWorkspace extends LightningElement {
   @api proposal;
   @api loading = false;
   @api executing = false;
+  @api visible = false;
 
   get hasProposal() {
     return !!this.proposal;
   }
 
   get showWorkspace() {
-    return this.loading || this.hasProposal;
+    return this.visible && (this.loading || this.hasProposal);
   }
 
   get hasWarnings() {
@@ -27,6 +28,10 @@ export default class MergeResolutionWorkspace extends LightningElement {
 
   get hasRelatedSummaries() {
     return !!(this.proposal && this.proposal.relatedSummaries && this.proposal.relatedSummaries.length);
+  }
+
+  get hasRecordLinks() {
+    return !!(this.proposal && this.proposal.records && this.proposal.records.length);
   }
 
   get executeDisabled() {

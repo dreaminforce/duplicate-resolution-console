@@ -11,6 +11,9 @@ import getMergeProposal from '@salesforce/apex/HeuristicDuplicateScanController.
 import executeMerge from '@salesforce/apex/HeuristicDuplicateScanController.executeMerge';
 import cancelScan from '@salesforce/apex/HeuristicDuplicateScanController.cancelScan';
 
+const COMPARISON_VALUE_LIMIT = 160;
+const RECORD_LINK_LABEL_LIMIT = 48;
+
 export default class HeuristicDuplicateAdmin extends LightningElement {
   @track objectOptions = [];
   @track selectedObject;
@@ -27,6 +30,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
   starting = false;
   mergeLoading = false;
   mergeExecuting = false;
+  mergeReviewVisible = false;
 
   selectedScanId;
   maxRecords = 2000;
@@ -106,6 +110,10 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
 
   get showDetailView() {
     return !!this.detailGroup;
+  }
+
+  get showDetailComparison() {
+    return !!this.detailGroup && !this.mergeReviewVisible && !this.mergeLoading;
   }
 
   get isCurrentScanRunning() {
@@ -190,6 +198,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       this.detailGroup = null;
       this.detailSourceGroup = null;
       this.mergeReview = null;
+      this.mergeReviewVisible = false;
       await this.refreshSelectedScan();
       await this.loadRecentScans();
       this.startPolling();
@@ -236,6 +245,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
     this.detailGroup = null;
     this.detailSourceGroup = null;
     this.mergeReview = null;
+    this.mergeReviewVisible = false;
     this.refreshSelectedScan();
   }
 
@@ -298,6 +308,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
           this.detailGroup = null;
           this.detailSourceGroup = null;
           this.mergeReview = null;
+          this.mergeReviewVisible = false;
         }
       }
 
@@ -325,6 +336,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       const detail = await getGroupDetail({ groupId });
       this.detailSourceGroup = detail;
       this.detailGroup = this.mapDetailGroup(detail);
+      this.mergeReviewVisible = false;
       if (this.mergeReview && this.mergeReview.groupId !== String(groupId)) {
         this.mergeReview = null;
       }
@@ -339,6 +351,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
     this.detailGroup = null;
     this.detailSourceGroup = null;
     this.mergeReview = null;
+    this.mergeReviewVisible = false;
   }
 
   buildFieldRows(fieldNames, records) {
@@ -348,7 +361,8 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       const values = records.map((record) => ({
         recordId: record.recordId,
         cellClass: record.isEffectiveParent ? 'is-parent' : '',
-        value: (record.fields && record.fields[fieldName]) || ''
+        fullValue: this.normalizeFieldValue(record.fields && record.fields[fieldName]),
+        displayValue: this.truncateFieldValue(record.fields && record.fields[fieldName])
       }));
 
       rows.push({
@@ -375,6 +389,11 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       mergeDisabled: !effectiveParentId || records.length < 2,
       effectiveParentId,
       records,
+      recordLinks: records.map((record) => ({
+        recordId: record.recordId,
+        recordUrl: record.recordUrl,
+        linkLabel: this.truncateDisplayLabel(record.displayValue)
+      })),
       detailFieldRows: this.buildFieldRows(detail.fieldNames || [], records)
     };
   }
@@ -449,12 +468,19 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       return;
     }
 
+    const groupId = String(this.detailGroup.groupId);
+    if (this.mergeReview && this.mergeReview.groupId === groupId) {
+      this.mergeReviewVisible = true;
+      return;
+    }
+
     const recordIds = this.getMergeCandidateIds(this.detailGroup);
     if (recordIds.length < 2) {
       this.notify('Select records', 'Choose at least two records before starting the merge review.', 'warning');
       return;
     }
 
+    this.mergeReviewVisible = true;
     this.mergeLoading = true;
     try {
       const proposal = await getMergeProposal({
@@ -463,7 +489,6 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
         preferredSurvivorId: this.getEffectiveParentId(this.detailGroup)
       });
 
-      const groupId = String(this.detailGroup.groupId);
       this.manualParentByGroup = {
         ...this.manualParentByGroup,
         [groupId]: proposal.survivorRecordId
@@ -473,6 +498,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       }
       this.mergeReview = this.mapMergeReview(proposal, groupId, this.detailGroup.groupKey);
     } catch (error) {
+      this.mergeReviewVisible = false;
       this.notifyError('Failed to build merge review', error);
     } finally {
       this.mergeLoading = false;
@@ -499,7 +525,8 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
         return {
           ...row,
           selectedSourceRecordId: sourceRecordId,
-          selectedValue: selectedCandidate ? selectedCandidate.value : ''
+          selectedValue: selectedCandidate ? selectedCandidate.value : '',
+          selectedDisplayValue: selectedCandidate ? selectedCandidate.displayValue : ''
         };
       });
 
@@ -514,7 +541,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
   }
 
   handleMergeReviewClose() {
-    this.mergeReview = null;
+    this.mergeReviewVisible = false;
   }
 
   async handleExecuteMerge() {
@@ -553,6 +580,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       this.selectionByGroup = updatedSelection;
 
       this.mergeReview = null;
+      this.mergeReviewVisible = false;
       this.detailGroup = null;
       this.detailSourceGroup = null;
 
@@ -568,6 +596,8 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
   mapMergeReview(proposal, groupId, title) {
     const records = (proposal.records || []).map((record) => ({
       ...record,
+      recordUrl: record.recordId ? `/${record.recordId}` : '#',
+      linkLabel: this.truncateDisplayLabel(record.displayValue),
       scoreSummary: `S:${record.survivorScore} | C:${record.completenessScore} | R:${record.relatedRecordCount}`
     }));
     const highRiskFields = [];
@@ -616,7 +646,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
 
     const values = records.map((record) => {
       const matchingCandidate = (field.candidates || []).find((candidate) => candidate.recordId === record.recordId);
-      const value = matchingCandidate ? matchingCandidate.value : '';
+      const value = this.normalizeFieldValue(matchingCandidate ? matchingCandidate.value : '');
       let cellClass = '';
       const meta = [];
       if (record.recordId === survivorRecordId) {
@@ -630,6 +660,8 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       return {
         recordId: record.recordId,
         value,
+        fullValue: value,
+        displayValue: this.truncateFieldValue(value),
         cellClass,
         metaLabel: meta.join(' | ')
       };
@@ -645,6 +677,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       recommendedSourceLabel: recommendedRecord ? recommendedRecord.displayValue : field.recommendedSourceRecordId,
       selectedSourceRecordId: field.selectedSourceRecordId,
       selectedValue,
+      selectedDisplayValue: selectedCandidate ? selectedCandidate.displayValue : '',
       selectorOptions,
       values
     };
@@ -655,7 +688,8 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       .map((field) => ({
         fieldApiName: field.fieldApiName,
         fieldLabel: field.fieldLabel,
-        selectedValue: field.selectedValue || '(blank)'
+        selectedValue: field.selectedValue || '(blank)',
+        selectedDisplayValue: field.selectedDisplayValue || '(blank)'
       }))
       .sort((left, right) => left.fieldLabel.localeCompare(right.fieldLabel));
   }
@@ -672,6 +706,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
   clearMergeReviewForGroup(groupId) {
     if (this.mergeReview && this.mergeReview.groupId === String(groupId)) {
       this.mergeReview = null;
+      this.mergeReviewVisible = false;
     }
   }
 
@@ -732,5 +767,31 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
     } catch (e) {
       return raw;
     }
+  }
+
+  normalizeFieldValue(value) {
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+    return String(value);
+  }
+
+  truncateFieldValue(value) {
+    const normalized = this.normalizeFieldValue(value);
+    if (!normalized || normalized.length <= COMPARISON_VALUE_LIMIT) {
+      return normalized;
+    }
+    return `${normalized.slice(0, COMPARISON_VALUE_LIMIT - 1).trimEnd()}...`;
+  }
+
+  truncateDisplayLabel(value) {
+    const normalized = this.normalizeFieldValue(value);
+    if (!normalized) {
+      return 'Open record';
+    }
+    if (normalized.length <= RECORD_LINK_LABEL_LIMIT) {
+      return normalized;
+    }
+    return `${normalized.slice(0, RECORD_LINK_LABEL_LIMIT - 1).trimEnd()}...`;
   }
 }

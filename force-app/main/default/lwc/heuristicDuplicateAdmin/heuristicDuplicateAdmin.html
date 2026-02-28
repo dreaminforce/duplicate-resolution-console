@@ -158,53 +158,71 @@
           </div>
         </div>
 
-        <div class="detail-actions">
-          <template if:true={detailGroup.canMergeUi}>
-            <lightning-button label="Select Survivor" onclick={handleSelectParentClick}></lightning-button>
-            <lightning-button
-              label="Review Merge"
-              variant="brand"
-              disabled={detailGroup.mergeDisabled}
-              onclick={handleReviewMerge}
-            ></lightning-button>
-          </template>
-        </div>
+        <template if:true={showDetailComparison}>
+          <div class="detail-actions">
+            <template if:true={detailGroup.canMergeUi}>
+              <lightning-button label="Select Survivor" onclick={handleSelectParentClick}></lightning-button>
+              <lightning-button
+                label="Review Merge"
+                variant="brand"
+                disabled={detailGroup.mergeDisabled}
+                onclick={handleReviewMerge}
+              ></lightning-button>
+            </template>
+          </div>
 
-        <lightning-datatable
-          key-field="recordId"
-          data={detailGroup.records}
-          columns={detailColumns}
-          data-group-id={detailGroup.groupId}
-          onrowselection={handleDetailRowSelection}
-        ></lightning-datatable>
+          <lightning-datatable
+            key-field="recordId"
+            data={detailGroup.records}
+            columns={detailColumns}
+            data-group-id={detailGroup.groupId}
+            onrowselection={handleDetailRowSelection}
+          ></lightning-datatable>
 
-        <div class="matrix-wrap detail-matrix-wrap">
-          <table class="field-matrix">
-            <thead>
-              <tr>
-                <th>Field</th>
-                <template for:each={detailGroup.records} for:item="recordCol">
-                  <th key={recordCol.recordId}>{recordCol.displayValue}</th>
-                </template>
-              </tr>
-            </thead>
-            <tbody>
-              <template for:each={detailGroup.detailFieldRows} for:item="row">
-                <tr key={row.name}>
-                  <td class="field-name">{row.name}</td>
-                  <template for:each={row.values} for:item="val">
-                    <td key={val.recordId} class={val.cellClass}>{val.value}</td>
+          <div class="record-links">
+            <span class="record-links-label">Open Records</span>
+            <template for:each={detailGroup.recordLinks} for:item="recordLink">
+              <a
+                key={recordLink.recordId}
+                class="record-link"
+                href={recordLink.recordUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {recordLink.linkLabel}
+              </a>
+            </template>
+          </div>
+
+          <div class="matrix-wrap detail-matrix-wrap">
+            <table class="field-matrix">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <template for:each={detailGroup.records} for:item="recordCol">
+                    <th key={recordCol.recordId}>{recordCol.displayValue}</th>
                   </template>
                 </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                <template for:each={detailGroup.detailFieldRows} for:item="row">
+                  <tr key={row.name}>
+                    <td class="field-name">{row.name}</td>
+                    <template for:each={row.values} for:item="val">
+                      <td key={val.recordId} class={val.cellClass} title={val.fullValue}>{val.displayValue}</td>
+                    </template>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
 
         <c-merge-resolution-workspace
           proposal={mergeReview}
           loading={mergeLoading}
           executing={mergeExecuting}
+          visible={mergeReviewVisible}
           onselectionchange={handleMergeSelectionChange}
           onexecute={handleExecuteMerge}
           onclose={handleMergeReviewClose}

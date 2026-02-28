@@ -8,6 +8,9 @@ import getMergeProposal from '@salesforce/apex/DuplicateAiController.getMergePro
 import executeMerge from '@salesforce/apex/DuplicateAiController.executeMerge';
 import deleteRecords from '@salesforce/apex/DuplicateAiController.deleteRecords';
 
+const COMPARISON_VALUE_LIMIT = 160;
+const RECORD_LINK_LABEL_LIMIT = 48;
+
 export default class AiDuplicateWorkbench extends LightningElement {
   @track objectOptions = [];
   @track selectedObject;
@@ -28,6 +31,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
   parentPickerSetId;
   mergeLoading = false;
   mergeExecuting = false;
+  mergeReviewVisible = false;
 
   columns = [
     {
@@ -76,6 +80,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
     this.warnings = [];
     this.detailSet = null;
     this.mergeReview = null;
+    this.mergeReviewVisible = false;
   }
 
   async runAnalysis(runAi) {
@@ -89,6 +94,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
     this.manualParentBySet = {};
     this.detailSet = null;
     this.mergeReview = null;
+    this.mergeReviewVisible = false;
 
     try {
       const result = await analyzeObject({ objectApiName: this.selectedObject, maxSets: 10, runAi });
@@ -157,7 +163,8 @@ export default class AiDuplicateWorkbench extends LightningElement {
         recordId: record.recordId,
         isParent: record.isEffectiveParent,
         cellClass: record.isEffectiveParent ? 'is-parent' : '',
-        value: (record.fields && record.fields[fieldName]) || ''
+        fullValue: this.normalizeFieldValue(record.fields && record.fields[fieldName]),
+        displayValue: this.truncateFieldValue(record.fields && record.fields[fieldName])
       }));
 
       rows.push({
@@ -186,6 +193,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
       return;
     }
     this.detailSet = targetSet;
+    this.mergeReviewVisible = false;
     if (this.mergeReview && this.mergeReview.setId !== String(setId)) {
       this.mergeReview = null;
     }
@@ -247,6 +255,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
   handleBackToSummary() {
     this.detailSet = null;
     this.mergeReview = null;
+    this.mergeReviewVisible = false;
   }
 
   handleSelectSurvivorFromReview() {
@@ -271,6 +280,10 @@ export default class AiDuplicateWorkbench extends LightningElement {
     }
 
     this.detailSet = targetSet;
+    if (this.mergeReview && this.mergeReview.setId === String(setId)) {
+      this.mergeReviewVisible = true;
+      return;
+    }
     await this.loadMergeReview(targetSet);
   }
 
@@ -281,6 +294,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
       return;
     }
 
+    this.mergeReviewVisible = true;
     this.mergeLoading = true;
     try {
       const proposal = await getMergeProposal({
@@ -301,6 +315,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
       this.detailSet = this.sets.find((setItem) => String(setItem.duplicateRecordSetId) === setId);
       this.mergeReview = this.mapMergeReview(proposal, setId, targetSet.duplicateRecordSetName);
     } catch (error) {
+      this.mergeReviewVisible = false;
       this.notifyError('Failed to build merge review', error);
     } finally {
       this.mergeLoading = false;
@@ -322,7 +337,8 @@ export default class AiDuplicateWorkbench extends LightningElement {
         return {
           ...row,
           selectedSourceRecordId: sourceRecordId,
-          selectedValue: selectedCandidate ? selectedCandidate.value : ''
+          selectedValue: selectedCandidate ? selectedCandidate.value : '',
+          selectedDisplayValue: selectedCandidate ? selectedCandidate.displayValue : ''
         };
       });
 
@@ -338,7 +354,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
   }
 
   handleMergeReviewClose() {
-    this.mergeReview = null;
+    this.mergeReviewVisible = false;
   }
 
   async handleExecuteMerge() {
@@ -369,6 +385,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
       );
 
       this.mergeReview = null;
+      this.mergeReviewVisible = false;
       this.detailSet = null;
       await this.runAnalysis(this.currentRunAi);
     } catch (error) {
@@ -448,6 +465,11 @@ export default class AiDuplicateWorkbench extends LightningElement {
       summaryShort: this.truncate(setItem.summary, 150),
       sectionLabel: `${setItem.duplicateRecordSetName} | ${records.length} records`,
       selectedRows: [],
+      recordLinks: records.map((record) => ({
+        recordId: record.recordId,
+        recordUrl: record.recordUrl,
+        linkLabel: this.truncateDisplayLabel(record.displayValue)
+      })),
       detailFieldRows: this.buildFieldRows(setItem.fieldNames || [], records)
     };
   }
@@ -455,6 +477,8 @@ export default class AiDuplicateWorkbench extends LightningElement {
   mapMergeReview(proposal, setId, title) {
     const records = (proposal.records || []).map((record) => ({
       ...record,
+      recordUrl: record.recordId ? `/${record.recordId}` : '#',
+      linkLabel: this.truncateDisplayLabel(record.displayValue),
       scoreSummary: `S:${record.survivorScore} | C:${record.completenessScore} | R:${record.relatedRecordCount}`
     }));
 
@@ -504,7 +528,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
 
     const values = records.map((record) => {
       const matchingCandidate = (field.candidates || []).find((candidate) => candidate.recordId === record.recordId);
-      const value = matchingCandidate ? matchingCandidate.value : '';
+      const value = this.normalizeFieldValue(matchingCandidate ? matchingCandidate.value : '');
       let cellClass = '';
       const meta = [];
       if (record.recordId === survivorRecordId) {
@@ -518,6 +542,8 @@ export default class AiDuplicateWorkbench extends LightningElement {
       return {
         recordId: record.recordId,
         value,
+        fullValue: value,
+        displayValue: this.truncateFieldValue(value),
         cellClass,
         metaLabel: meta.join(' | ')
       };
@@ -533,6 +559,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
       recommendedSourceLabel: recommendedRecord ? recommendedRecord.displayValue : field.recommendedSourceRecordId,
       selectedSourceRecordId: field.selectedSourceRecordId,
       selectedValue,
+      selectedDisplayValue: selectedCandidate ? selectedCandidate.displayValue : '',
       selectorOptions,
       values
     };
@@ -543,7 +570,8 @@ export default class AiDuplicateWorkbench extends LightningElement {
       .map((field) => ({
         fieldApiName: field.fieldApiName,
         fieldLabel: field.fieldLabel,
-        selectedValue: field.selectedValue || '(blank)'
+        selectedValue: field.selectedValue || '(blank)',
+        selectedDisplayValue: field.selectedDisplayValue || '(blank)'
       }))
       .sort((left, right) => left.fieldLabel.localeCompare(right.fieldLabel));
   }
@@ -569,6 +597,7 @@ export default class AiDuplicateWorkbench extends LightningElement {
   clearMergeReviewForSet(setId) {
     if (this.mergeReview && this.mergeReview.setId === String(setId)) {
       this.mergeReview = null;
+      this.mergeReviewVisible = false;
     }
   }
 
@@ -582,5 +611,35 @@ export default class AiDuplicateWorkbench extends LightningElement {
 
   get showDetailView() {
     return !!this.detailSet;
+  }
+
+  get showDetailComparison() {
+    return !!this.detailSet && !this.mergeReviewVisible && !this.mergeLoading;
+  }
+
+  normalizeFieldValue(value) {
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+    return String(value);
+  }
+
+  truncateFieldValue(value) {
+    const normalized = this.normalizeFieldValue(value);
+    if (!normalized || normalized.length <= COMPARISON_VALUE_LIMIT) {
+      return normalized;
+    }
+    return `${normalized.slice(0, COMPARISON_VALUE_LIMIT - 1).trimEnd()}...`;
+  }
+
+  truncateDisplayLabel(value) {
+    const normalized = this.normalizeFieldValue(value);
+    if (!normalized) {
+      return 'Open record';
+    }
+    if (normalized.length <= RECORD_LINK_LABEL_LIMIT) {
+      return normalized;
+    }
+    return `${normalized.slice(0, RECORD_LINK_LABEL_LIMIT - 1).trimEnd()}...`;
   }
 }

@@ -189,6 +189,40 @@
   margin-bottom: 0.6rem;
 }
 
+.record-links {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.75rem 0;
+}
+
+.record-links-label {
+  color: #4a5a70;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.record-link {
+  background: #eef4fb;
+  border: 1px solid #d2deee;
+  border-radius: 999px;
+  color: #0b4a75;
+  font-size: 0.74rem;
+  max-width: 18rem;
+  overflow: hidden;
+  padding: 0.18rem 0.65rem;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-link:hover {
+  border-color: #6e86ad;
+  text-decoration: underline;
+}
+
 .merge-note {
   color: #5f6e82;
   margin: 0;
@@ -199,7 +233,8 @@
   border-radius: 0.5rem;
   margin-top: 0.75rem;
   max-height: 300px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .detail-matrix-wrap {
@@ -209,6 +244,8 @@
 .field-matrix {
   border-collapse: collapse;
   min-width: 100%;
+  table-layout: fixed;
+  width: 100%;
 }
 
 .field-matrix th,
@@ -218,7 +255,14 @@
   padding: 0.35rem 0.45rem;
   text-align: left;
   vertical-align: top;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.field-matrix th:first-child,
+.field-name {
+  width: 12rem;
 }
 
 .field-name {
@@ -227,6 +271,7 @@
   font-weight: 600;
   left: 0;
   position: sticky;
+  z-index: 1;
 }
 
 .is-parent {
