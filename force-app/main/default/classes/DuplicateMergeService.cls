@@ -799,7 +799,11 @@ public with sharing class DuplicateMergeService {
         String.valueOf(MAX_RELATIONSHIP_SCANS) +
         ' child relationships to stay within Apex limits.'
       );
-      return plans.subList(0, MAX_RELATIONSHIP_SCANS);
+      List<RelationshipPlan> trimmedPlans = new List<RelationshipPlan>();
+      for (Integer i = 0; i < MAX_RELATIONSHIP_SCANS; i++) {
+        trimmedPlans.add(plans[i]);
+      }
+      return trimmedPlans;
     }
     return plans;
   }
@@ -945,7 +949,7 @@ public with sharing class DuplicateMergeService {
 
     Integer score = 0;
     if (lastModified != null) {
-      Integer days = lastModified.daysBetween(System.now());
+      Integer days = lastModified.date().daysBetween(Date.today());
       if (days <= 30) {
         score += 15;
       } else if (days <= 180) {
