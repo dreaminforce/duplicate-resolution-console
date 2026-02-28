@@ -155,9 +155,100 @@ private class HeuristicDuplicateScanServiceTest {
   }
 
   @IsTest
-  static void mergeRecords_forAccount_mergesSelectedChildren() {
-    Account parent = new Account(Name = 'Merge Parent', Phone = '2125550101');
-    Account child = new Account(Name = 'Merge Child', Phone = '2125550101');
+  static void mergeProposal_andExecute_softMergeAccount() {
+    Account survivor = new Account(Name = 'Merge Parent', Phone = null, Description = null, BillingCity = 'New York');
+    Account child = new Account(
+      Name = 'Merge Child',
+      Phone = '2125550101',
+      Description = 'Preferred description from duplicate child.',
+      BillingCity = 'New York'
+    );
+    insert new List<Account>{ survivor, child };
+
+    Contact relatedContact = new Contact(LastName = 'Related', AccountId = child.Id);
+    insert relatedContact;
+
+    DuplicateMergeService.MergeProposal proposal = HeuristicDuplicateScanController.getMergeProposal(
+      'Account',
+      new List<String>{ String.valueOf(survivor.Id), String.valueOf(child.Id) },
+      String.valueOf(survivor.Id)
+    );
+
+    System.assertEquals(String.valueOf(survivor.Id), proposal.survivorRecordId);
+    System.assertEquals(2, proposal.records.size());
+    System.assert(proposal.relatedRecordCount > 0);
+
+    Boolean foundPhoneRecommendation = false;
+    for (DuplicateMergeService.FieldProposal fieldProposal : proposal.fields) {
+      if (fieldProposal.fieldApiName == 'Phone') {
+        foundPhoneRecommendation = true;
+        System.assertEquals(String.valueOf(child.Id), fieldProposal.recommendedSourceRecordId);
+      }
+    }
+    System.assertEquals(true, foundPhoneRecommendation);
+
+    DuplicateMergeService.MergeExecutionRequest request = new DuplicateMergeService.MergeExecutionRequest();
+    request.objectApiName = 'Account';
+    request.survivorRecordId = String.valueOf(survivor.Id);
+    request.loserRecordIds = new List<String>{ String.valueOf(child.Id) };
+    request.fieldSelections = new List<DuplicateMergeService.FieldSelectionInput>();
+    for (DuplicateMergeService.FieldProposal fieldProposal : proposal.fields) {
+      DuplicateMergeService.FieldSelectionInput selection = new DuplicateMergeService.FieldSelectionInput();
+      selection.fieldApiName = fieldProposal.fieldApiName;
+      selection.sourceRecordId = fieldProposal.recommendedSourceRecordId;
+      request.fieldSelections.add(selection);
+    }
+
+    DuplicateMergeService.MergeExecutionResult result = HeuristicDuplicateScanController.executeMerge(request);
+    System.assertEquals(true, result.success, result.message);
+    System.assertEquals(1, result.softMergedCount);
+
+    Account refreshedSurvivor = [
+      SELECT Phone, Description
+      FROM Account
+      WHERE Id = :survivor.Id
+      LIMIT 1
+    ];
+    System.assertEquals('2125550101', refreshedSurvivor.Phone);
+    System.assertEquals('Preferred description from duplicate child.', refreshedSurvivor.Description);
+
+    Contact refreshedContact = [
+      SELECT AccountId
+      FROM Contact
+      WHERE Id = :relatedContact.Id
+      LIMIT 1
+    ];
+    System.assertEquals(survivor.Id, refreshedContact.AccountId);
+
+    System.assertEquals(1, [SELECT COUNT() FROM Account WHERE Id = :child.Id]);
+
+    List<Duplicate_Merge_Record__c> registryRows = [
+      SELECT Source_Record_Id__c, Merged_Into_Record_Id__c, Soft_Merge_Status__c, Snapshot_JSON__c
+      FROM Duplicate_Merge_Record__c
+      WHERE Source_Record_Id__c = :String.valueOf(child.Id)
+    ];
+    System.assertEquals(1, registryRows.size());
+    System.assertEquals(String.valueOf(survivor.Id), registryRows[0].Merged_Into_Record_Id__c);
+    System.assertEquals('Merged', registryRows[0].Soft_Merge_Status__c);
+    System.assert(registryRows[0].Snapshot_JSON__c.contains(String.valueOf(child.Id)));
+
+    List<Duplicate_Merge_Run__c> runs = [
+      SELECT Status__c, Updated_Field_Count__c, Reparented_Record_Count__c, Merged_Record_Count__c
+      FROM Duplicate_Merge_Run__c
+      ORDER BY CreatedDate DESC
+      LIMIT 1
+    ];
+    System.assertEquals(1, runs.size());
+    System.assertEquals('Completed', runs[0].Status__c);
+    System.assert(runs[0].Updated_Field_Count__c > 0);
+    System.assert(runs[0].Reparented_Record_Count__c > 0);
+    System.assertEquals(1, runs[0].Merged_Record_Count__c.intValue());
+  }
+
+  @IsTest
+  static void mergeRecords_forAccount_usesSoftMergeWrapper() {
+    Account parent = new Account(Name = 'Wrapper Parent', Phone = null);
+    Account child = new Account(Name = 'Wrapper Child', Phone = '2125550202');
     insert new List<Account>{ parent, child };
 
     HeuristicDuplicateScanService.ActionResult result = HeuristicDuplicateScanController.mergeRecords(
@@ -168,8 +259,25 @@ private class HeuristicDuplicateScanServiceTest {
 
     System.assertEquals(true, result.success, result.message);
     System.assertEquals(1, result.processedCount);
+    System.assertEquals(1, [SELECT COUNT() FROM Account WHERE Id = :child.Id]);
+    System.assertEquals(1, [SELECT COUNT() FROM Duplicate_Merge_Record__c WHERE Source_Record_Id__c = :String.valueOf(child.Id)]);
+  }
 
-    System.assertEquals(1, [SELECT COUNT() FROM Account WHERE Id = :parent.Id]);
-    System.assertEquals(0, [SELECT COUNT() FROM Account WHERE Id = :child.Id]);
+  @IsTest
+  static void softMergedRecords_areExcludedFromFutureScans() {
+    Account survivor = new Account(Name = 'Blue Sky Consulting', Phone = '+1 (212) 555-0144', BillingCity = 'New York');
+    Account loser = new Account(Name = 'BlueSky Consulting', Phone = '2125550144', BillingCity = 'New York');
+    Account unrelated = new Account(Name = 'Red Valley Manufacturing', Phone = '4159991111', BillingCity = 'San Francisco');
+    insert new List<Account>{ survivor, loser, unrelated };
+
+    HeuristicDuplicateScanController.mergeRecords('Account', survivor.Id, new List<Id>{ loser.Id });
+
+    Id scanId;
+    Test.startTest();
+    scanId = HeuristicDuplicateScanController.startScan('Account', 500, 75, true);
+    Test.stopTest();
+
+    List<HeuristicDuplicateScanService.DuplicateGroup> groups = HeuristicDuplicateScanController.getGroupsForScan(scanId, 10);
+    System.assertEquals(0, groups.size());
   }
 }

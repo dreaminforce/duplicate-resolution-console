@@ -1,6 +1,5 @@
 public with sharing class DuplicateAiService {
   private static final Integer DEFAULT_SET_LIMIT = 10;
-  private static final Set<String> MERGEABLE_OBJECTS = new Set<String>{ 'Account', 'Contact', 'Lead', 'Case' };
 
   public class ObjectOption {
     @AuraEnabled public String objectApiName;
@@ -108,10 +107,22 @@ public with sharing class DuplicateAiService {
       LIMIT 5000
     ];
 
+    Set<Id> candidateRecordIds = new Set<Id>();
+    for (DuplicateRecordItem item : duplicateItems) {
+      if (item.RecordId != null && item.RecordId.getSObjectType().getDescribe().getName() == objectApiName) {
+        candidateRecordIds.add(item.RecordId);
+      }
+    }
+    Set<Id> softMergedIds = DuplicateMergeService.getSoftMergedRecordIds(objectApiName, candidateRecordIds);
+
     Map<Id, SetContext> setContextsById = new Map<Id, SetContext>();
     Integer selectedItemCount = 0;
     for (DuplicateRecordItem item : duplicateItems) {
-      if (item.RecordId == null || item.RecordId.getSObjectType().getDescribe().getName() != objectApiName) {
+      if (
+        item.RecordId == null ||
+        item.RecordId.getSObjectType().getDescribe().getName() != objectApiName ||
+        softMergedIds.contains(item.RecordId)
+      ) {
         continue;
       }
 
@@ -126,6 +137,9 @@ public with sharing class DuplicateAiService {
       }
       setContextsById.get(item.DuplicateRecordSetId).recordIds.add(item.RecordId);
     }
+
+    pruneSmallSets(setContextsById);
+    selectedItemCount = countSetItems(setContextsById.values());
 
     if (setContextsById.isEmpty()) {
       AnalysisResponse emptyResponse = new AnalysisResponse();
@@ -218,9 +232,23 @@ public with sharing class DuplicateAiService {
       }
     }
 
+    Set<Id> softMergedIds = DuplicateMergeService.getSoftMergedRecordIds(objectApiName, new Set<Id>(ctx.recordIds));
+    List<Id> filteredRecordIds = new List<Id>();
+    for (Id recordId : ctx.recordIds) {
+      if (!softMergedIds.contains(recordId)) {
+        filteredRecordIds.add(recordId);
+      }
+    }
+    ctx.recordIds = filteredRecordIds;
+
     if (ctx.recordIds.isEmpty()) {
       throw new AuraHandledException(
         'No records in set ' + String.valueOf(duplicateRecordSetId) + ' for object ' + objectApiName + '.'
+      );
+    }
+    if (ctx.recordIds.size() < 2) {
+      throw new AuraHandledException(
+        'Only one active record remains in set ' + String.valueOf(duplicateRecordSetId) + ' after excluding soft merges.'
       );
     }
 
@@ -261,40 +289,28 @@ public with sharing class DuplicateAiService {
       return result;
     }
 
-    if (!MERGEABLE_OBJECTS.contains(objectApiName)) {
-      result.success = false;
-      result.message = objectApiName + ' does not support merge in Salesforce.';
-      return result;
+    DuplicateMergeService.MergeProposal proposal = DuplicateMergeService.getMergeProposal(
+      objectApiName,
+      mergeCandidateIds(parentRecordId, childRecordIds),
+      String.valueOf(parentRecordId)
+    );
+    DuplicateMergeService.MergeExecutionRequest request = new DuplicateMergeService.MergeExecutionRequest();
+    request.objectApiName = objectApiName;
+    request.survivorRecordId = String.valueOf(parentRecordId);
+    request.loserRecordIds = stringifyIds(childRecordIds);
+    request.fieldSelections = new List<DuplicateMergeService.FieldSelectionInput>();
+    for (DuplicateMergeService.FieldProposal fieldProposal : proposal.fields) {
+      DuplicateMergeService.FieldSelectionInput selection = new DuplicateMergeService.FieldSelectionInput();
+      selection.fieldApiName = fieldProposal.fieldApiName;
+      selection.sourceRecordId = fieldProposal.recommendedSourceRecordId;
+      request.fieldSelections.add(selection);
     }
 
-    SObject master = Database.query('SELECT Id FROM ' + objectApiName + ' WHERE Id = :parentRecordId LIMIT 1');
-
-    for (Id childId : childRecordIds) {
-      if (childId == parentRecordId) {
-        continue;
-      }
-
-      try {
-        SObject child = Database.query('SELECT Id FROM ' + objectApiName + ' WHERE Id = :childId LIMIT 1');
-        Database.MergeResult mergeResult = Database.merge(master, child, false);
-        if (mergeResult.isSuccess()) {
-          result.processedCount++;
-        } else {
-          for (Database.Error err : mergeResult.getErrors()) {
-            result.errors.add(err.getMessage());
-          }
-          result.success = false;
-        }
-      } catch (Exception ex) {
-        result.errors.add('Failed to merge ' + String.valueOf(childId) + ': ' + ex.getMessage());
-        result.success = false;
-      }
-    }
-
-    result.message =
-      result.success
-        ? 'Merged ' + result.processedCount + ' record(s) into ' + String.valueOf(parentRecordId) + '.'
-        : 'Merge finished with errors. Processed: ' + result.processedCount;
+    DuplicateMergeService.MergeExecutionResult execution = DuplicateMergeService.executeMerge(request);
+    result.success = execution.success;
+    result.message = execution.message;
+    result.processedCount = execution.softMergedCount;
+    result.errors.addAll(execution.errors);
     return result;
   }
 
@@ -441,7 +457,7 @@ public with sharing class DuplicateAiService {
     setResult.duplicateRecordSetId = ctx.setId;
     setResult.duplicateRecordSetName = String.isBlank(ctx.setName) ? String.valueOf(ctx.setId) : ctx.setName;
     setResult.createdDate = ctx.createdDate;
-    setResult.canMerge = shouldRunAi && MERGEABLE_OBJECTS.contains(objectApiName);
+    setResult.canMerge = uiRecords.size() > 1;
     setResult.fieldNames = allFieldNames;
     setResult.records = uiRecords;
     setResult.summary = shouldRunAi
@@ -754,6 +770,48 @@ public with sharing class DuplicateAiService {
     if (String.isBlank(objectApiName) || !Schema.getGlobalDescribe().containsKey(objectApiName)) {
       throw new AuraHandledException('Unknown object: ' + objectApiName);
     }
+  }
+
+  private static void pruneSmallSets(Map<Id, SetContext> setContextsById) {
+    List<Id> toRemove = new List<Id>();
+    for (Id setId : setContextsById.keySet()) {
+      if (setContextsById.get(setId).recordIds.size() < 2) {
+        toRemove.add(setId);
+      }
+    }
+    for (Id setId : toRemove) {
+      setContextsById.remove(setId);
+    }
+  }
+
+  private static Integer countSetItems(List<SetContext> contexts) {
+    Integer total = 0;
+    for (SetContext ctx : contexts) {
+      total += ctx.recordIds.size();
+    }
+    return total;
+  }
+
+  private static List<String> mergeCandidateIds(Id parentRecordId, List<Id> childRecordIds) {
+    List<String> ids = new List<String>();
+    if (parentRecordId != null) {
+      ids.add(String.valueOf(parentRecordId));
+    }
+    ids.addAll(stringifyIds(childRecordIds));
+    return ids;
+  }
+
+  private static List<String> stringifyIds(List<Id> ids) {
+    List<String> out = new List<String>();
+    if (ids == null) {
+      return out;
+    }
+    for (Id idValue : ids) {
+      if (idValue != null) {
+        out.add(String.valueOf(idValue));
+      }
+    }
+    return out;
   }
 
   private class ObjectOptionSorter implements Comparator<ObjectOption> {

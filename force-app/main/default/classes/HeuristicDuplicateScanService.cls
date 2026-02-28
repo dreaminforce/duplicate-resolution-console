@@ -269,8 +269,21 @@ public with sharing class HeuristicDuplicateScanService {
       LIMIT 5000
     ];
 
+    Set<Id> memberRecordIds = new Set<Id>();
+    for (Heuristic_Duplicate_Member__c member : members) {
+      Id parsed = parseRecordId(member.Record_Id__c);
+      if (parsed != null) {
+        memberRecordIds.add(parsed);
+      }
+    }
+    Set<Id> softMergedIds = DuplicateMergeService.getSoftMergedRecordIds(groups[0].Object_Api_Name__c, memberRecordIds);
+
     for (Heuristic_Duplicate_Member__c member : members) {
       if (!byGroupId.containsKey(member.Group__c)) {
+        continue;
+      }
+      Id parsed = parseRecordId(member.Record_Id__c);
+      if (parsed != null && softMergedIds.contains(parsed)) {
         continue;
       }
 
@@ -287,7 +300,11 @@ public with sharing class HeuristicDuplicateScanService {
 
     List<DuplicateGroup> response = new List<DuplicateGroup>();
     for (Heuristic_Duplicate_Group__c source : groups) {
-      response.add(byGroupId.get(source.Id));
+      DuplicateGroup dto = byGroupId.get(source.Id);
+      dto.recordCount = dto.records.size();
+      if (dto.records.size() >= 2) {
+        response.add(dto);
+      }
     }
 
     return response;
@@ -330,6 +347,9 @@ public with sharing class HeuristicDuplicateScanService {
       }
     }
 
+    Set<Id> softMergedIds = DuplicateMergeService.getSoftMergedRecordIds(objectApiName, recordIds);
+    recordIds.removeAll(softMergedIds);
+
     QueryResultContext queryContext = queryAllFieldsForRecords(objectApiName, recordIds);
     List<String> allFieldNames = queryContext.queriedFieldNames;
     Set<String> queriedFieldSet = new Set<String>();
@@ -348,6 +368,9 @@ public with sharing class HeuristicDuplicateScanService {
 
     for (Heuristic_Duplicate_Member__c member : members) {
       Id parsed = parseRecordId(member.Record_Id__c);
+      if (parsed != null && softMergedIds.contains(parsed)) {
+        continue;
+      }
       SObject row = parsed == null ? null : queryContext.recordsById.get(parsed);
       Map<String, String> flatFields = row == null ? new Map<String, String>() : flattenFields(row, allFieldNames);
 
@@ -506,6 +529,11 @@ public with sharing class HeuristicDuplicateScanService {
 
     String label = d.getLabel();
     if (String.isBlank(label)) {
+      return false;
+    }
+
+    String apiName = d.getName();
+    if (apiName != null && (apiName.startsWith('Heuristic_Duplicate_') || apiName.startsWith('Duplicate_Merge_'))) {
       return false;
     }
 

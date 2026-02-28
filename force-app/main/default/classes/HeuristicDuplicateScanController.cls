@@ -35,6 +35,20 @@ public with sharing class HeuristicDuplicateScanController {
   }
 
   @AuraEnabled
+  public static DuplicateMergeService.MergeProposal getMergeProposal(
+    String objectApiName,
+    List<String> recordIds,
+    String preferredSurvivorId
+  ) {
+    return DuplicateMergeService.getMergeProposal(objectApiName, recordIds, preferredSurvivorId);
+  }
+
+  @AuraEnabled
+  public static DuplicateMergeService.MergeExecutionResult executeMerge(DuplicateMergeService.MergeExecutionRequest request) {
+    return DuplicateMergeService.executeMerge(request);
+  }
+
+  @AuraEnabled
   public static HeuristicDuplicateScanService.ActionResult mergeRecords(
     String objectApiName,
     Id parentRecordId,

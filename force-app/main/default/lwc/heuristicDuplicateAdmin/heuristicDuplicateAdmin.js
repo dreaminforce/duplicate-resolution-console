@@ -7,12 +7,11 @@ import getScanStatus from '@salesforce/apex/HeuristicDuplicateScanController.get
 import getRecentScans from '@salesforce/apex/HeuristicDuplicateScanController.getRecentScans';
 import getGroupsForScan from '@salesforce/apex/HeuristicDuplicateScanController.getGroupsForScan';
 import getGroupDetail from '@salesforce/apex/HeuristicDuplicateScanController.getGroupDetail';
-import mergeRecords from '@salesforce/apex/HeuristicDuplicateScanController.mergeRecords';
+import getMergeProposal from '@salesforce/apex/HeuristicDuplicateScanController.getMergeProposal';
+import executeMerge from '@salesforce/apex/HeuristicDuplicateScanController.executeMerge';
 import cancelScan from '@salesforce/apex/HeuristicDuplicateScanController.cancelScan';
 
 export default class HeuristicDuplicateAdmin extends LightningElement {
-  static MERGEABLE_OBJECTS = ['Account', 'Contact', 'Lead', 'Case'];
-
   @track objectOptions = [];
   @track selectedObject;
   @track scanStatus;
@@ -22,9 +21,12 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
   @track parentPickerOpen = false;
   @track parentOptions = [];
   @track selectedParentCandidate;
+  @track mergeReview;
 
   loading = false;
   starting = false;
+  mergeLoading = false;
+  mergeExecuting = false;
 
   selectedScanId;
   maxRecords = 2000;
@@ -59,7 +61,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       type: 'url',
       typeAttributes: { label: { fieldName: 'displayValue' } }
     },
-    { label: 'Parent', fieldName: 'parentBadge', type: 'text', fixedWidth: 88 },
+    { label: 'Survivor', fieldName: 'parentBadge', type: 'text', fixedWidth: 88 },
     { label: 'Score', fieldName: 'score', type: 'number', fixedWidth: 92 },
     { label: 'Reason', fieldName: 'reason', type: 'text' }
   ];
@@ -187,6 +189,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       this.selectedScanId = scanId;
       this.detailGroup = null;
       this.detailSourceGroup = null;
+      this.mergeReview = null;
       await this.refreshSelectedScan();
       await this.loadRecentScans();
       this.startPolling();
@@ -232,6 +235,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
     this.selectedScanId = event.currentTarget.dataset.scanId;
     this.detailGroup = null;
     this.detailSourceGroup = null;
+    this.mergeReview = null;
     this.refreshSelectedScan();
   }
 
@@ -288,6 +292,15 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
         }))
       }));
 
+      if (this.detailGroup) {
+        const latestDetail = this.groups.find((group) => String(group.groupId) === String(this.detailGroup.groupId));
+        if (!latestDetail) {
+          this.detailGroup = null;
+          this.detailSourceGroup = null;
+          this.mergeReview = null;
+        }
+      }
+
       if (this.isCurrentScanRunning) {
         this.startPolling();
       } else {
@@ -312,6 +325,9 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       const detail = await getGroupDetail({ groupId });
       this.detailSourceGroup = detail;
       this.detailGroup = this.mapDetailGroup(detail);
+      if (this.mergeReview && this.mergeReview.groupId !== String(groupId)) {
+        this.mergeReview = null;
+      }
     } catch (error) {
       this.notifyError('Failed to load group detail', error);
     } finally {
@@ -322,6 +338,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
   handleBackToSummary() {
     this.detailGroup = null;
     this.detailSourceGroup = null;
+    this.mergeReview = null;
   }
 
   buildFieldRows(fieldNames, records) {
@@ -331,7 +348,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       const values = records.map((record) => ({
         recordId: record.recordId,
         cellClass: record.isEffectiveParent ? 'is-parent' : '',
-        value: record.fields?.[fieldName] || ''
+        value: (record.fields && record.fields[fieldName]) || ''
       }));
 
       rows.push({
@@ -354,8 +371,8 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
 
     return {
       ...detail,
-      canMergeUi: HeuristicDuplicateAdmin.MERGEABLE_OBJECTS.includes(detail.objectApiName),
-      mergeDisabled: !effectiveParentId,
+      canMergeUi: records.length > 1,
+      mergeDisabled: !effectiveParentId || records.length < 2,
       effectiveParentId,
       records,
       detailFieldRows: this.buildFieldRows(detail.fieldNames || [], records)
@@ -366,7 +383,9 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
     if (!groupDetail || !groupDetail.groupId) {
       return null;
     }
-    return this.manualParentByGroup[String(groupDetail.groupId)] || null;
+    const firstRecordId =
+      groupDetail.records && groupDetail.records.length ? groupDetail.records[0].recordId : null;
+    return this.manualParentByGroup[String(groupDetail.groupId)] || firstRecordId || null;
   }
 
   handleDetailRowSelection(event) {
@@ -376,11 +395,12 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       ...this.selectionByGroup,
       [groupId]: selectedIds
     };
+    this.clearMergeReviewForGroup(groupId);
   }
 
   handleSelectParentClick() {
     if (!this.detailGroup || !this.detailGroup.records || !this.detailGroup.records.length) {
-      this.notify('No records', 'No records available in this group to select as parent.', 'info');
+      this.notify('No records', 'No records available in this group to select as survivor.', 'info');
       return;
     }
 
@@ -419,62 +439,239 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       this.detailGroup = this.mapDetailGroup(this.detailSourceGroup);
     }
 
-    this.notify('Parent selected', 'Parent record selected for this group.', 'success');
+    this.clearMergeReviewForGroup(this.parentPickerGroupId);
+    this.notify('Survivor selected', 'Survivor record selected for this group.', 'success');
     this.handleParentPickerCancel();
   }
 
-  async handleMergeClick() {
+  async handleReviewMerge() {
     if (!this.detailGroup) {
       return;
     }
 
-    const groupId = String(this.detailGroup.groupId);
-    const parentId = this.getEffectiveParentId(this.detailGroup);
-    if (!parentId) {
-      this.notify('Select parent', 'Select a parent record before merge.', 'warning');
+    const recordIds = this.getMergeCandidateIds(this.detailGroup);
+    if (recordIds.length < 2) {
+      this.notify('Select records', 'Choose at least two records before starting the merge review.', 'warning');
       return;
     }
 
-    const selected = this.selectionByGroup[groupId] || [];
-    const children = selected.length
-      ? selected.filter((id) => id !== parentId)
-      : this.detailGroup.records.filter((record) => !record.isEffectiveParent).map((record) => record.recordId);
-
-    if (!children.length) {
-      this.notify('Nothing to merge', 'Select at least one child record.', 'info');
-      return;
-    }
-
-    this.loading = true;
+    this.mergeLoading = true;
     try {
-      const result = await mergeRecords({
+      const proposal = await getMergeProposal({
         objectApiName: this.detailGroup.objectApiName,
-        parentRecordId: parentId,
-        childRecordIds: children
+        recordIds,
+        preferredSurvivorId: this.getEffectiveParentId(this.detailGroup)
       });
+
+      const groupId = String(this.detailGroup.groupId);
+      this.manualParentByGroup = {
+        ...this.manualParentByGroup,
+        [groupId]: proposal.survivorRecordId
+      };
+      if (this.detailSourceGroup) {
+        this.detailGroup = this.mapDetailGroup(this.detailSourceGroup);
+      }
+      this.mergeReview = this.mapMergeReview(proposal, groupId, this.detailGroup.groupKey);
+    } catch (error) {
+      this.notifyError('Failed to build merge review', error);
+    } finally {
+      this.mergeLoading = false;
+    }
+  }
+
+  handleSelectSurvivorFromReview() {
+    this.handleSelectParentClick();
+  }
+
+  handleMergeSelectionChange(event) {
+    if (!this.mergeReview) {
+      return;
+    }
+
+    const { fieldApiName, sourceRecordId } = event.detail;
+    const updateRows = (rows) =>
+      rows.map((row) => {
+        if (row.fieldApiName !== fieldApiName) {
+          return row;
+        }
+
+        const selectedCandidate = row.values.find((value) => value.recordId === sourceRecordId);
+        return {
+          ...row,
+          selectedSourceRecordId: sourceRecordId,
+          selectedValue: selectedCandidate ? selectedCandidate.value : ''
+        };
+      });
+
+    const highRiskFields = updateRows(this.mergeReview.highRiskFields);
+    const lowRiskFields = updateRows(this.mergeReview.lowRiskFields);
+    this.mergeReview = {
+      ...this.mergeReview,
+      highRiskFields,
+      lowRiskFields,
+      previewFields: this.buildPreviewFields(highRiskFields, lowRiskFields)
+    };
+  }
+
+  handleMergeReviewClose() {
+    this.mergeReview = null;
+  }
+
+  async handleExecuteMerge() {
+    if (!this.mergeReview) {
+      return;
+    }
+
+    this.mergeExecuting = true;
+    try {
+      const fieldSelections = [...this.mergeReview.highRiskFields, ...this.mergeReview.lowRiskFields].map((row) => ({
+        fieldApiName: row.fieldApiName,
+        sourceRecordId: row.selectedSourceRecordId
+      }));
+
+      const result = await executeMerge({
+        request: {
+          objectApiName: this.detailGroup.objectApiName,
+          survivorRecordId: this.mergeReview.survivorRecordId,
+          loserRecordIds: this.mergeReview.recordIds.filter((recordId) => recordId !== this.mergeReview.survivorRecordId),
+          fieldSelections
+        }
+      });
+
       this.notify(
-        result.success ? 'Merge completed' : 'Merge completed with errors',
+        result.success ? 'Soft merge completed' : 'Soft merge completed with errors',
         result.message,
         result.success ? 'success' : 'warning'
       );
 
       const updatedManual = { ...this.manualParentByGroup };
-      delete updatedManual[groupId];
+      delete updatedManual[this.mergeReview.groupId];
       this.manualParentByGroup = updatedManual;
 
       const updatedSelection = { ...this.selectionByGroup };
-      delete updatedSelection[groupId];
+      delete updatedSelection[this.mergeReview.groupId];
       this.selectionByGroup = updatedSelection;
 
+      this.mergeReview = null;
       this.detailGroup = null;
       this.detailSourceGroup = null;
 
       await this.refreshSelectedScan();
       await this.loadRecentScans();
     } catch (error) {
-      this.notifyError('Merge failed', error);
+      this.notifyError('Soft merge failed', error);
     } finally {
-      this.loading = false;
+      this.mergeExecuting = false;
+    }
+  }
+
+  mapMergeReview(proposal, groupId, title) {
+    const records = (proposal.records || []).map((record) => ({
+      ...record,
+      scoreSummary: `S:${record.survivorScore} | C:${record.completenessScore} | R:${record.relatedRecordCount}`
+    }));
+    const highRiskFields = [];
+    const lowRiskFields = [];
+
+    (proposal.fields || []).forEach((field) => {
+      const row = this.mapMergeFieldRow(field, records, proposal.survivorRecordId);
+      if (field.requiresReview) {
+        highRiskFields.push(row);
+      } else {
+        lowRiskFields.push(row);
+      }
+    });
+
+    return {
+      groupId,
+      title: `${title} Resolution Review`,
+      objectLabel: proposal.objectLabel,
+      summary: proposal.summary,
+      survivorRecordId: proposal.survivorRecordId,
+      survivorDisplayValue: proposal.survivorDisplayValue,
+      reviewRequiredCount: proposal.reviewRequiredCount,
+      lowRiskFieldCount: proposal.lowRiskFieldCount,
+      relatedRecordCount: proposal.relatedRecordCount,
+      warnings: proposal.warnings || [],
+      records,
+      highRiskFields,
+      lowRiskFields,
+      previewFields: this.buildPreviewFields(highRiskFields, lowRiskFields),
+      relatedSummaries: (proposal.relatedSummaries || []).map((item) => ({
+        ...item,
+        key: `${item.childObjectApiName}-${item.fieldApiName}`
+      })),
+      recordIds: records.map((record) => record.recordId)
+    };
+  }
+
+  mapMergeFieldRow(field, records, survivorRecordId) {
+    const recommendedRecord = records.find((record) => record.recordId === field.recommendedSourceRecordId);
+    const selectorOptions = records.map((record) => ({
+      label: `${record.displayValue}${record.recordId === survivorRecordId ? ' (Survivor)' : ''}${
+        record.recordId === field.recommendedSourceRecordId ? ' (Recommended)' : ''
+      }`,
+      value: record.recordId
+    }));
+
+    const values = records.map((record) => {
+      const matchingCandidate = (field.candidates || []).find((candidate) => candidate.recordId === record.recordId);
+      const value = matchingCandidate ? matchingCandidate.value : '';
+      let cellClass = '';
+      const meta = [];
+      if (record.recordId === survivorRecordId) {
+        cellClass = 'cell-survivor';
+        meta.push('Survivor');
+      }
+      if (record.recordId === field.recommendedSourceRecordId) {
+        cellClass = record.recordId === survivorRecordId ? 'cell-survivor cell-recommended' : 'cell-recommended';
+        meta.push('Recommended');
+      }
+      return {
+        recordId: record.recordId,
+        value,
+        cellClass,
+        metaLabel: meta.join(' | ')
+      };
+    });
+
+    const selectedCandidate = values.find((value) => value.recordId === field.selectedSourceRecordId);
+    const selectedValue = selectedCandidate ? selectedCandidate.value : '';
+    return {
+      fieldApiName: field.fieldApiName,
+      fieldLabel: field.fieldLabel,
+      recommendationReason: field.recommendationReason,
+      recommendedSourceRecordId: field.recommendedSourceRecordId,
+      recommendedSourceLabel: recommendedRecord ? recommendedRecord.displayValue : field.recommendedSourceRecordId,
+      selectedSourceRecordId: field.selectedSourceRecordId,
+      selectedValue,
+      selectorOptions,
+      values
+    };
+  }
+
+  buildPreviewFields(highRiskFields, lowRiskFields) {
+    return [...highRiskFields, ...lowRiskFields]
+      .map((field) => ({
+        fieldApiName: field.fieldApiName,
+        fieldLabel: field.fieldLabel,
+        selectedValue: field.selectedValue || '(blank)'
+      }))
+      .sort((left, right) => left.fieldLabel.localeCompare(right.fieldLabel));
+  }
+
+  getMergeCandidateIds(groupDetail) {
+    const groupId = String(groupDetail.groupId);
+    const selected = this.selectionByGroup[groupId] || [];
+    const survivorId = this.getEffectiveParentId(groupDetail);
+    const allRecordIds = (groupDetail.records || []).map((record) => record.recordId);
+    const candidateIds = selected.length ? Array.from(new Set([survivorId, ...selected].filter(Boolean))) : allRecordIds;
+    return candidateIds.length >= 2 ? candidateIds : allRecordIds;
+  }
+
+  clearMergeReviewForGroup(groupId) {
+    if (this.mergeReview && this.mergeReview.groupId === String(groupId)) {
+      this.mergeReview = null;
     }
   }
 

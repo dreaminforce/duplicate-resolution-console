@@ -2,6 +2,7 @@
 
 This project now includes a first implementation of an AI-assisted duplicate resolution workbench for Salesforce.
 It also includes a separate deterministic duplicate scanner that does not depend on Salesforce Matching Rules/Duplicate Rules and supports scanning any selected object.
+The merge path now uses a survivor-plus-field-resolution workflow with soft-merge audit tracking instead of Salesforce `Database.merge`.
 
 ## What it does
 
@@ -10,15 +11,16 @@ It also includes a separate deterministic duplicate scanner that does not depend
 3. User opens **Matching & Duplicate Rule Workbench** and selects an object.
 4. The app analyzes duplicate sets for that object.
 5. For each set, AI proposes:
-   - canonical parent record
+   - canonical survivor record
    - ranked closeness/match score for all records
    - recommended action (`KEEP`, `MERGE`, `DELETE`, `REVIEW`)
-6. User reviews detailed set data and executes actions.
+6. User reviews detailed set data, approves field-level merge choices, and executes a soft merge.
 
 ## Included components
 
 - `force-app/main/default/classes/DuplicateAiController.cls`
 - `force-app/main/default/classes/DuplicateAiService.cls`
+- `force-app/main/default/classes/DuplicateMergeService.cls`
 - `force-app/main/default/classes/OpenAiResponsesClient.cls`
 - `force-app/main/default/lwc/aiDuplicateWorkbench/*`
 - `force-app/main/default/tabs/AI_Duplicate_Workbench.tab-meta.xml`
@@ -36,6 +38,8 @@ It also includes a separate deterministic duplicate scanner that does not depend
 - `force-app/main/default/objects/Heuristic_Duplicate_Scan__c/*`
 - `force-app/main/default/objects/Heuristic_Duplicate_Group__c/*`
 - `force-app/main/default/objects/Heuristic_Duplicate_Member__c/*`
+- `force-app/main/default/objects/Duplicate_Merge_Run__c/*`
+- `force-app/main/default/objects/Duplicate_Merge_Record__c/*`
 - `force-app/main/default/objects/Account/fields/Heuristic_Duplicate_*`
 
 ## OpenAI setup
@@ -65,7 +69,12 @@ sf org assign permset --name AI_Duplicate_Workbench --target-org <alias>
 
 ## Notes
 
-- Merge action is only enabled for merge-capable standard objects (`Account`, `Contact`, `Lead`, `Case`).
+- Merge review is available for every supported object in the workbench and heuristic scanner.
+- Execution uses a soft-merge workflow:
+  - one survivor record is kept
+  - survivor fields are updated from field-level recommendations and user overrides
+  - related records are reparented when possible
+  - losing records are written to a soft-merge registry and preserved for audit
 - If AI analysis fails for a set, deterministic fallback ranking is used so users can still proceed.
 - The LWC field matrix is intentionally compact and scrollable to handle wide record comparisons.
 - The **Heuristic Duplicate Admin** tab runs on button-click and scans one selected object at a time (for example Account-to-Account, Contact-to-Contact, Lead-to-Lead).

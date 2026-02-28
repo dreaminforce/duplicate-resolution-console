@@ -160,16 +160,13 @@
 
         <div class="detail-actions">
           <template if:true={detailGroup.canMergeUi}>
-            <lightning-button label="Select Parent" onclick={handleSelectParentClick}></lightning-button>
+            <lightning-button label="Select Survivor" onclick={handleSelectParentClick}></lightning-button>
             <lightning-button
-              label="Merge Selected"
+              label="Review Merge"
               variant="brand"
               disabled={detailGroup.mergeDisabled}
-              onclick={handleMergeClick}
+              onclick={handleReviewMerge}
             ></lightning-button>
-          </template>
-          <template if:false={detailGroup.canMergeUi}>
-            <p class="merge-note">Merge is available for Account, Contact, Lead, and Case only.</p>
           </template>
         </div>
 
@@ -203,6 +200,16 @@
             </tbody>
           </table>
         </div>
+
+        <c-merge-resolution-workspace
+          proposal={mergeReview}
+          loading={mergeLoading}
+          executing={mergeExecuting}
+          onselectionchange={handleMergeSelectionChange}
+          onexecute={handleExecuteMerge}
+          onclose={handleMergeReviewClose}
+          onselectsurvivor={handleSelectSurvivorFromReview}
+        ></c-merge-resolution-workspace>
       </section>
     </template>
 
@@ -210,12 +217,12 @@
       <section role="dialog" tabindex="-1" aria-modal="true" class="slds-modal slds-fade-in-open">
         <div class="slds-modal__container">
           <header class="slds-modal__header">
-            <h2 class="slds-text-heading_medium">Select Parent Record</h2>
+            <h2 class="slds-text-heading_medium">Select Survivor Record</h2>
           </header>
           <div class="slds-modal__content slds-p-around_medium">
             <lightning-radio-group
               name="parentPicker"
-              label="Parent record"
+              label="Survivor record"
               options={parentOptions}
               value={selectedParentCandidate}
               type="radio"
@@ -224,7 +231,7 @@
           </div>
           <footer class="slds-modal__footer">
             <lightning-button label="Cancel" onclick={handleParentPickerCancel}></lightning-button>
-            <lightning-button variant="brand" label="Set Parent" onclick={handleParentPickerConfirm}></lightning-button>
+            <lightning-button variant="brand" label="Set Survivor" onclick={handleParentPickerConfirm}></lightning-button>
           </footer>
         </div>
       </section>

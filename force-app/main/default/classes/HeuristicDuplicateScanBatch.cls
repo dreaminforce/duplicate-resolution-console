@@ -69,6 +69,10 @@ public with sharing class HeuristicDuplicateScanBatch implements Database.Batcha
     );
 
     String soql = 'SELECT ' + String.join(queryFields, ',') + ' FROM ' + objectApiName;
+    Set<Id> softMergedIds = DuplicateMergeService.getSoftMergedRecordIds(objectApiName);
+    if (!softMergedIds.isEmpty()) {
+      soql += ' WHERE Id NOT IN :softMergedIds';
+    }
     if (!String.isBlank(orderByField)) {
       soql += ' ORDER BY ' + orderByField + ' DESC';
     }

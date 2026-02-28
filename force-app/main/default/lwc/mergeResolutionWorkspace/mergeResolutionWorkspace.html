@@ -1,0 +1,191 @@
+<template>
+  <template if:true={showWorkspace}>
+    <section class="merge-review">
+      <template if:true={loading}>
+        <div class="loading-shell">
+          <lightning-spinner alternative-text="Loading merge proposal" size="small"></lightning-spinner>
+        </div>
+      </template>
+
+      <template if:true={hasProposal}>
+        <div class="review-header">
+          <div>
+            <p class="eyebrow">Resolution Workflow</p>
+            <h3 class="title">{proposal.title}</h3>
+            <p class="summary">{proposal.summary}</p>
+          </div>
+          <div class="review-actions">
+            <lightning-button label="Select Survivor" onclick={handleSelectSurvivor}></lightning-button>
+            <lightning-button
+              label="Close Review"
+              onclick={handleClose}
+              disabled={loading}
+            ></lightning-button>
+            <lightning-button
+              variant="brand"
+              label="Execute Soft Merge"
+              onclick={handleExecute}
+              disabled={executeDisabled}
+            ></lightning-button>
+          </div>
+        </div>
+
+        <div class="summary-grid">
+          <article class="metric">
+            <p class="metric-label">Survivor</p>
+            <p class="metric-value">{proposal.survivorDisplayValue}</p>
+          </article>
+          <article class="metric">
+            <p class="metric-label">Object</p>
+            <p class="metric-value">{proposal.objectLabel}</p>
+          </article>
+          <article class="metric">
+            <p class="metric-label">Review Required</p>
+            <p class="metric-value">{proposal.reviewRequiredCount}</p>
+          </article>
+          <article class="metric">
+            <p class="metric-label">Auto Fill</p>
+            <p class="metric-value">{proposal.lowRiskFieldCount}</p>
+          </article>
+          <article class="metric">
+            <p class="metric-label">Related Moves</p>
+            <p class="metric-value">{proposal.relatedRecordCount}</p>
+          </article>
+        </div>
+
+        <template if:true={hasWarnings}>
+          <template for:each={proposal.warnings} for:item="warning">
+            <div class="warning" key={warning}>{warning}</div>
+          </template>
+        </template>
+
+        <template if:true={hasHighRiskFields}>
+          <section class="field-section">
+            <h4>High-Risk Fields</h4>
+            <div class="table-wrap">
+              <table class="merge-table">
+                <thead>
+                  <tr>
+                    <th>Field</th>
+                    <th>Final Choice</th>
+                    <th>Recommendation</th>
+                    <template for:each={proposal.records} for:item="recordCol">
+                      <th key={recordCol.recordId}>{recordCol.displayValue}</th>
+                    </template>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template for:each={proposal.highRiskFields} for:item="row">
+                    <tr key={row.fieldApiName}>
+                      <td class="field-name">
+                        <strong>{row.fieldLabel}</strong>
+                        <span class="field-risk">Review</span>
+                      </td>
+                      <td class="final-cell">
+                        <lightning-combobox
+                          data-field-api-name={row.fieldApiName}
+                          variant="label-hidden"
+                          value={row.selectedSourceRecordId}
+                          options={row.selectorOptions}
+                          onchange={handleSelectionChange}
+                        ></lightning-combobox>
+                        <p class="final-value">{row.selectedValue}</p>
+                      </td>
+                      <td class="recommendation">
+                        <p>{row.recommendationReason}</p>
+                        <p class="meta-text">Recommended: {row.recommendedSourceLabel}</p>
+                      </td>
+                      <template for:each={row.values} for:item="valueCell">
+                        <td key={valueCell.recordId} class={valueCell.cellClass}>
+                          <div>{valueCell.value}</div>
+                          <p class="meta-text">{valueCell.metaLabel}</p>
+                        </td>
+                      </template>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </template>
+
+        <template if:true={hasLowRiskFields}>
+          <section class="field-section">
+            <h4>Lower-Risk Fields</h4>
+            <div class="table-wrap">
+              <table class="merge-table">
+                <thead>
+                  <tr>
+                    <th>Field</th>
+                    <th>Final Choice</th>
+                    <th>Recommendation</th>
+                    <template for:each={proposal.records} for:item="recordCol">
+                      <th key={recordCol.recordId}>{recordCol.displayValue}</th>
+                    </template>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template for:each={proposal.lowRiskFields} for:item="row">
+                    <tr key={row.fieldApiName}>
+                      <td class="field-name">
+                        <strong>{row.fieldLabel}</strong>
+                        <span class="field-risk low">Auto</span>
+                      </td>
+                      <td class="final-cell">
+                        <lightning-combobox
+                          data-field-api-name={row.fieldApiName}
+                          variant="label-hidden"
+                          value={row.selectedSourceRecordId}
+                          options={row.selectorOptions}
+                          onchange={handleSelectionChange}
+                        ></lightning-combobox>
+                        <p class="final-value">{row.selectedValue}</p>
+                      </td>
+                      <td class="recommendation">
+                        <p>{row.recommendationReason}</p>
+                        <p class="meta-text">Recommended: {row.recommendedSourceLabel}</p>
+                      </td>
+                      <template for:each={row.values} for:item="valueCell">
+                        <td key={valueCell.recordId} class={valueCell.cellClass}>
+                          <div>{valueCell.value}</div>
+                          <p class="meta-text">{valueCell.metaLabel}</p>
+                        </td>
+                      </template>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </template>
+
+        <section class="preview-section">
+          <h4>Final Record Preview</h4>
+          <div class="preview-grid">
+            <template for:each={proposal.previewFields} for:item="previewField">
+              <article key={previewField.fieldApiName} class="preview-card">
+                <p class="preview-label">{previewField.fieldLabel}</p>
+                <p class="preview-value">{previewField.selectedValue}</p>
+              </article>
+            </template>
+          </div>
+        </section>
+
+        <template if:true={hasRelatedSummaries}>
+          <section class="related-section">
+            <h4>Related Data Moves</h4>
+            <div class="related-list">
+              <template for:each={proposal.relatedSummaries} for:item="item">
+                <article key={item.key} class="related-card">
+                  <p class="related-title">{item.relationshipLabel}</p>
+                  <p class="related-meta">{item.childObjectApiName}.{item.fieldApiName}</p>
+                  <p class="related-count">{item.recordCount} record(s)</p>
+                </article>
+              </template>
+            </div>
+          </section>
+        </template>
+      </template>
+    </section>
+  </template>
+</template>

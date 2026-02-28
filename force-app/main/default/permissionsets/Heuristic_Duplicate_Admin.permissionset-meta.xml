@@ -13,6 +13,10 @@
     <apexClass>HeuristicDuplicateScanBatch</apexClass>
     <enabled>true</enabled>
   </classAccesses>
+  <classAccesses>
+    <apexClass>DuplicateMergeService</apexClass>
+    <enabled>true</enabled>
+  </classAccesses>
   <applicationVisibilities>
     <application>Duplicate_Resolution</application>
     <visible>true</visible>
@@ -206,6 +210,24 @@
     <allowRead>true</allowRead>
     <modifyAllRecords>false</modifyAllRecords>
     <object>Heuristic_Duplicate_Member__c</object>
+    <viewAllRecords>false</viewAllRecords>
+  </objectPermissions>
+  <objectPermissions>
+    <allowCreate>true</allowCreate>
+    <allowDelete>false</allowDelete>
+    <allowEdit>true</allowEdit>
+    <allowRead>true</allowRead>
+    <modifyAllRecords>false</modifyAllRecords>
+    <object>Duplicate_Merge_Run__c</object>
+    <viewAllRecords>false</viewAllRecords>
+  </objectPermissions>
+  <objectPermissions>
+    <allowCreate>true</allowCreate>
+    <allowDelete>false</allowDelete>
+    <allowEdit>true</allowEdit>
+    <allowRead>true</allowRead>
+    <modifyAllRecords>false</modifyAllRecords>
+    <object>Duplicate_Merge_Record__c</object>
     <viewAllRecords>false</viewAllRecords>
   </objectPermissions>
   <tabSettings>

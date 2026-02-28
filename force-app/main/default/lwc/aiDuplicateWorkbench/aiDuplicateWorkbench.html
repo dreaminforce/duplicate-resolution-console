@@ -84,16 +84,16 @@
                 ></lightning-button>
                 <template if:true={setItem.canMergeUi}>
                   <lightning-button
-                    label="Select Parent"
+                    label="Select Survivor"
                     data-set-id={setItem.duplicateRecordSetId}
                     onclick={handleSelectParentClick}
                   ></lightning-button>
                   <lightning-button
-                    label="Merge"
+                    label="Review Merge"
                     variant="brand"
                     disabled={setItem.mergeDisabled}
                     data-set-id={setItem.duplicateRecordSetId}
-                    onclick={handleMergeClick}
+                    onclick={handleReviewMerge}
                   ></lightning-button>
                 </template>
                 <lightning-button
@@ -131,16 +131,16 @@
         <div class="set-actions detail-actions">
           <template if:true={detailSet.canMergeUi}>
             <lightning-button
-              label="Select Parent"
+              label="Select Survivor"
               data-set-id={detailSet.duplicateRecordSetId}
               onclick={handleSelectParentClick}
             ></lightning-button>
             <lightning-button
-              label="Merge Selected"
+              label="Review Merge"
               variant="brand"
               disabled={detailSet.mergeDisabled}
               data-set-id={detailSet.duplicateRecordSetId}
-              onclick={handleMergeClick}
+              onclick={handleReviewMerge}
             ></lightning-button>
           </template>
           <lightning-button
@@ -181,6 +181,16 @@
             </tbody>
           </table>
         </div>
+
+        <c-merge-resolution-workspace
+          proposal={mergeReview}
+          loading={mergeLoading}
+          executing={mergeExecuting}
+          onselectionchange={handleMergeSelectionChange}
+          onexecute={handleExecuteMerge}
+          onclose={handleMergeReviewClose}
+          onselectsurvivor={handleSelectSurvivorFromReview}
+        ></c-merge-resolution-workspace>
       </section>
     </template>
 
@@ -188,12 +198,12 @@
       <section role="dialog" tabindex="-1" aria-modal="true" class="slds-modal slds-fade-in-open">
         <div class="slds-modal__container">
           <header class="slds-modal__header">
-            <h2 class="slds-text-heading_medium">Select Parent Record</h2>
+            <h2 class="slds-text-heading_medium">Select Survivor Record</h2>
           </header>
           <div class="slds-modal__content slds-p-around_medium">
             <lightning-radio-group
               name="parentPicker"
-              label="Parent record"
+              label="Survivor record"
               options={parentOptions}
               value={selectedParentCandidate}
               type="radio"
@@ -202,7 +212,7 @@
           </div>
           <footer class="slds-modal__footer">
             <lightning-button label="Cancel" onclick={handleParentPickerCancel}></lightning-button>
-            <lightning-button variant="brand" label="Set Parent" onclick={handleParentPickerConfirm}></lightning-button>
+            <lightning-button variant="brand" label="Set Survivor" onclick={handleParentPickerConfirm}></lightning-button>
           </footer>
         </div>
       </section>
