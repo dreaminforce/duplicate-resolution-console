@@ -8,7 +8,7 @@ import getRecentScans from '@salesforce/apex/HeuristicDuplicateScanController.ge
 import getGroupsForScan from '@salesforce/apex/HeuristicDuplicateScanController.getGroupsForScan';
 import getGroupDetail from '@salesforce/apex/HeuristicDuplicateScanController.getGroupDetail';
 import getMergeProposal from '@salesforce/apex/HeuristicDuplicateScanController.getMergeProposal';
-import executeMerge from '@salesforce/apex/HeuristicDuplicateScanController.executeMerge';
+import executeSoftMerge from '@salesforce/apex/HeuristicDuplicateScanController.executeSoftMerge';
 import cancelScan from '@salesforce/apex/HeuristicDuplicateScanController.cancelScan';
 
 const COMPARISON_VALUE_LIMIT = 160;
@@ -562,15 +562,11 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
         sourceRecordId: row.selectedSourceRecordId
       }));
 
-      const request = {
+      const result = await executeSoftMerge({
         objectApiName: this.detailGroup.objectApiName,
         survivorRecordId,
         loserRecordIds: this.mergeReview.recordIds.filter((recordId) => recordId !== survivorRecordId),
         fieldSelections
-      };
-
-      const result = await executeMerge({
-        request
       });
 
       this.notify(

@@ -5,7 +5,7 @@ import getObjectOptions from '@salesforce/apex/DuplicateAiController.getObjectOp
 import analyzeObject from '@salesforce/apex/DuplicateAiController.analyzeObject';
 import analyzeSingleSet from '@salesforce/apex/DuplicateAiController.analyzeSingleSet';
 import getMergeProposal from '@salesforce/apex/DuplicateAiController.getMergeProposal';
-import executeMerge from '@salesforce/apex/DuplicateAiController.executeMerge';
+import executeSoftMerge from '@salesforce/apex/DuplicateAiController.executeSoftMerge';
 import deleteRecords from '@salesforce/apex/DuplicateAiController.deleteRecords';
 
 const COMPARISON_VALUE_LIMIT = 160;
@@ -375,15 +375,11 @@ export default class AiDuplicateWorkbench extends LightningElement {
         sourceRecordId: row.selectedSourceRecordId
       }));
 
-      const request = {
+      const result = await executeSoftMerge({
         objectApiName: this.selectedObject,
         survivorRecordId,
         loserRecordIds: this.mergeReview.recordIds.filter((recordId) => recordId !== survivorRecordId),
         fieldSelections
-      };
-
-      const result = await executeMerge({
-        request
       });
 
       this.notify(

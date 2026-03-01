@@ -37,6 +37,21 @@ public with sharing class DuplicateAiController {
   }
 
   @AuraEnabled
+  public static DuplicateMergeService.MergeExecutionResult executeSoftMerge(
+    String objectApiName,
+    String survivorRecordId,
+    List<String> loserRecordIds,
+    List<DuplicateMergeService.FieldSelectionInput> fieldSelections
+  ) {
+    DuplicateMergeService.MergeExecutionRequest request = new DuplicateMergeService.MergeExecutionRequest();
+    request.objectApiName = objectApiName;
+    request.survivorRecordId = survivorRecordId;
+    request.loserRecordIds = loserRecordIds;
+    request.fieldSelections = fieldSelections;
+    return DuplicateMergeService.executeMerge(request);
+  }
+
+  @AuraEnabled
   public static DuplicateAiService.ActionResult mergeRecords(
     String objectApiName,
     Id parentRecordId,
