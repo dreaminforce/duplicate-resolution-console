@@ -49,22 +49,6 @@
   justify-content: flex-end;
 }
 
-.back-link {
-  background: none;
-  border: 0;
-  color: #0b5cab;
-  cursor: pointer;
-  font: inherit;
-  padding: 0.45rem 0.2rem;
-  text-decoration: underline;
-}
-
-.back-link:disabled {
-  color: #8aa1b8;
-  cursor: default;
-  text-decoration: none;
-}
-
 .record-links {
   align-items: center;
   display: flex;

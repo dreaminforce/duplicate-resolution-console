@@ -15,10 +15,13 @@
             <p class="summary">{proposal.summary}</p>
           </div>
           <div class="review-actions">
+            <lightning-button
+              label="Back to Field Comparison"
+              icon-name="utility:back"
+              onclick={handleClose}
+              disabled={loading}
+            ></lightning-button>
             <lightning-button label="Select Survivor" onclick={handleSelectSurvivor}></lightning-button>
-            <button class="back-link" type="button" onclick={handleClose} disabled={loading}>
-              Back to Field Comparison
-            </button>
             <lightning-button
               variant="brand"
               label="Execute Soft Merge"

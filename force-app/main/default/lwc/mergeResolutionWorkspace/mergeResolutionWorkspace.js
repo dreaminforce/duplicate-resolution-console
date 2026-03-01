@@ -35,7 +35,7 @@ export default class MergeResolutionWorkspace extends LightningElement {
   }
 
   get executeDisabled() {
-    return this.loading || this.executing || !this.hasProposal;
+    return this.loading || this.executing || !this.hasProposal || !this.proposal.survivorRecordId;
   }
 
   handleSelectionChange(event) {

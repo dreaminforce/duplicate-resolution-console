@@ -551,18 +551,26 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
 
     this.mergeExecuting = true;
     try {
+      const survivorRecordId = this.getExecutableSurvivorId();
+      if (!survivorRecordId) {
+        this.notify('Select survivor', 'Choose a survivor record before executing the merge.', 'warning');
+        return;
+      }
+
       const fieldSelections = [...this.mergeReview.highRiskFields, ...this.mergeReview.lowRiskFields].map((row) => ({
         fieldApiName: row.fieldApiName,
         sourceRecordId: row.selectedSourceRecordId
       }));
 
+      const request = {
+        objectApiName: this.detailGroup.objectApiName,
+        survivorRecordId,
+        loserRecordIds: this.mergeReview.recordIds.filter((recordId) => recordId !== survivorRecordId),
+        fieldSelections
+      };
+
       const result = await executeMerge({
-        request: {
-          objectApiName: this.detailGroup.objectApiName,
-          survivorRecordId: this.mergeReview.survivorRecordId,
-          loserRecordIds: this.mergeReview.recordIds.filter((recordId) => recordId !== this.mergeReview.survivorRecordId),
-          fieldSelections
-        }
+        request
       });
 
       this.notify(
@@ -617,7 +625,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       title: `${title} Resolution Review`,
       objectLabel: proposal.objectLabel,
       summary: proposal.summary,
-      survivorRecordId: proposal.survivorRecordId,
+      survivorRecordId: this.resolveProposalSurvivorId(proposal, records),
       survivorDisplayValue: proposal.survivorDisplayValue,
       reviewRequiredCount: proposal.reviewRequiredCount,
       lowRiskFieldCount: proposal.lowRiskFieldCount,
@@ -708,6 +716,25 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       this.mergeReview = null;
       this.mergeReviewVisible = false;
     }
+  }
+
+  getExecutableSurvivorId() {
+    const reviewSurvivorId = this.mergeReview ? this.mergeReview.survivorRecordId : null;
+    if (reviewSurvivorId) {
+      return reviewSurvivorId;
+    }
+    return this.getEffectiveParentId(this.detailGroup);
+  }
+
+  resolveProposalSurvivorId(proposal, records) {
+    if (proposal && proposal.survivorRecordId) {
+      return proposal.survivorRecordId;
+    }
+    const flaggedSurvivor = (records || []).find((record) => record.isSurvivor);
+    if (flaggedSurvivor) {
+      return flaggedSurvivor.recordId;
+    }
+    return this.getEffectiveParentId(this.detailGroup) || ((records || [])[0] || {}).recordId || null;
   }
 
   startPolling() {
