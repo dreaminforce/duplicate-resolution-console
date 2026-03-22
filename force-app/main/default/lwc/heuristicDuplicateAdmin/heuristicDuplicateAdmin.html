@@ -145,6 +145,50 @@
           <p class="empty-text">No flagged groups for this scan.</p>
         </template>
       </section>
+
+      <section class="groups-section">
+        <h2>Merged Duplicate Groups</h2>
+        <template if:true={hasMergedGroups}>
+          <lightning-accordion allow-multiple-sections-open>
+            <template for:each={mergedGroups} for:item="group">
+              <lightning-accordion-section
+                key={group.mergeRunId}
+                name={group.mergeRunId}
+                label={group.sectionLabel}
+              >
+                <p class="group-summary">{group.summary}</p>
+                <div class="metrics">
+                  <div class="metric"><span>Status</span><strong>{group.status}</strong></div>
+                  <div class="metric"><span>Merged At</span><strong>{group.createdDateLabel}</strong></div>
+                  <div class="metric"><span>Updated Fields</span><strong>{group.updatedFieldCount}</strong></div>
+                  <div class="metric"><span>Reparented</span><strong>{group.reparentedRecordCount}</strong></div>
+                  <div class="metric"><span>Merged Records</span><strong>{group.mergedRecordCount}</strong></div>
+                  <div class="metric">
+                    <span>Survivor</span>
+                    <strong>
+                      <a href={group.survivorUrl} target="_blank" rel="noopener noreferrer">
+                        {group.survivorDisplayValue}
+                      </a>
+                    </strong>
+                  </div>
+                </div>
+                <template if:true={group.warnings}>
+                  <p class="error-text">{group.warnings}</p>
+                </template>
+                <lightning-datatable
+                  key-field="sourceRecordId"
+                  data={group.mergedRecords}
+                  columns={mergedRecordColumns}
+                  hide-checkbox-column
+                ></lightning-datatable>
+              </lightning-accordion-section>
+            </template>
+          </lightning-accordion>
+        </template>
+        <template if:false={hasMergedGroups}>
+          <p class="empty-text">No merged groups for this scan.</p>
+        </template>
+      </section>
     </template>
 
     <template if:true={showDetailView}>

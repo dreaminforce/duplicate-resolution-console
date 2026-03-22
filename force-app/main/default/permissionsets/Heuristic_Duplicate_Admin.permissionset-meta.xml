@@ -185,6 +185,22 @@
     <readable>true</readable>
   </fieldPermissions>
 
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Duplicate_Merge_Run__c.Group__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Duplicate_Merge_Run__c.Group_Key__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Duplicate_Merge_Run__c.Scan__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+
   <objectPermissions>
     <allowCreate>true</allowCreate>
     <allowDelete>true</allowDelete>

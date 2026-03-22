@@ -71,6 +71,31 @@ public with sharing class HeuristicDuplicateScanService {
     @AuraEnabled public List<GroupDetailRecord> records;
   }
 
+  public class MergedRecordHistory {
+    @AuraEnabled public String sourceRecordId;
+    @AuraEnabled public String sourceDisplay;
+    @AuraEnabled public String mergedIntoRecordId;
+    @AuraEnabled public String softMergeStatus;
+  }
+
+  public class MergedGroupHistory {
+    @AuraEnabled public Id mergeRunId;
+    @AuraEnabled public Id scanId;
+    @AuraEnabled public Id groupId;
+    @AuraEnabled public String groupKey;
+    @AuraEnabled public String objectApiName;
+    @AuraEnabled public String status;
+    @AuraEnabled public String summary;
+    @AuraEnabled public String warnings;
+    @AuraEnabled public String survivorRecordId;
+    @AuraEnabled public String survivorDisplayValue;
+    @AuraEnabled public Datetime createdDate;
+    @AuraEnabled public Integer updatedFieldCount;
+    @AuraEnabled public Integer reparentedRecordCount;
+    @AuraEnabled public Integer mergedRecordCount;
+    @AuraEnabled public List<MergedRecordHistory> mergedRecords;
+  }
+
   public class ActionResult {
     @AuraEnabled public Boolean success;
     @AuraEnabled public String message;
@@ -307,6 +332,89 @@ public with sharing class HeuristicDuplicateScanService {
       }
     }
 
+    return response;
+  }
+
+  public static List<MergedGroupHistory> getMergedGroupsForScan(Id scanId, Integer maxRows) {
+    if (scanId == null) {
+      throw new AuraHandledException('scanId is required.');
+    }
+
+    Integer rowLimit = maxRows == null || maxRows <= 0 ? 20 : Math.min(maxRows, 50);
+
+    List<Duplicate_Merge_Run__c> mergeRuns = [
+      SELECT
+        Id,
+        Scan__c,
+        Group__c,
+        Group_Key__c,
+        Object_Api_Name__c,
+        Status__c,
+        Summary__c,
+        Warnings__c,
+        Survivor_Record_Id__c,
+        Survivor_Display__c,
+        CreatedDate,
+        Updated_Field_Count__c,
+        Reparented_Record_Count__c,
+        Merged_Record_Count__c
+      FROM Duplicate_Merge_Run__c
+      WHERE Scan__c = :scanId
+      ORDER BY CreatedDate DESC
+      LIMIT :rowLimit
+    ];
+
+    if (mergeRuns.isEmpty()) {
+      return new List<MergedGroupHistory>();
+    }
+
+    Map<Id, MergedGroupHistory> historyByRunId = new Map<Id, MergedGroupHistory>();
+    Set<Id> runIds = new Set<Id>();
+    for (Duplicate_Merge_Run__c run : mergeRuns) {
+      runIds.add(run.Id);
+
+      MergedGroupHistory row = new MergedGroupHistory();
+      row.mergeRunId = run.Id;
+      row.scanId = run.Scan__c;
+      row.groupId = run.Group__c;
+      row.groupKey = run.Group_Key__c;
+      row.objectApiName = run.Object_Api_Name__c;
+      row.status = run.Status__c;
+      row.summary = run.Summary__c;
+      row.warnings = run.Warnings__c;
+      row.survivorRecordId = run.Survivor_Record_Id__c;
+      row.survivorDisplayValue = run.Survivor_Display__c;
+      row.createdDate = run.CreatedDate;
+      row.updatedFieldCount = toInteger(run.Updated_Field_Count__c);
+      row.reparentedRecordCount = toInteger(run.Reparented_Record_Count__c);
+      row.mergedRecordCount = toInteger(run.Merged_Record_Count__c);
+      row.mergedRecords = new List<MergedRecordHistory>();
+      historyByRunId.put(run.Id, row);
+    }
+
+    for (Duplicate_Merge_Record__c recordRow : [
+      SELECT Merge_Run__c, Source_Record_Id__c, Source_Display__c, Merged_Into_Record_Id__c, Soft_Merge_Status__c
+      FROM Duplicate_Merge_Record__c
+      WHERE Merge_Run__c IN :runIds
+      ORDER BY CreatedDate DESC
+      LIMIT 5000
+    ]) {
+      if (!historyByRunId.containsKey(recordRow.Merge_Run__c)) {
+        continue;
+      }
+
+      MergedRecordHistory mergedRecord = new MergedRecordHistory();
+      mergedRecord.sourceRecordId = recordRow.Source_Record_Id__c;
+      mergedRecord.sourceDisplay = recordRow.Source_Display__c;
+      mergedRecord.mergedIntoRecordId = recordRow.Merged_Into_Record_Id__c;
+      mergedRecord.softMergeStatus = recordRow.Soft_Merge_Status__c;
+      historyByRunId.get(recordRow.Merge_Run__c).mergedRecords.add(mergedRecord);
+    }
+
+    List<MergedGroupHistory> response = new List<MergedGroupHistory>();
+    for (Duplicate_Merge_Run__c run : mergeRuns) {
+      response.add(historyByRunId.get(run.Id));
+    }
     return response;
   }
 

@@ -199,7 +199,10 @@ private class HeuristicDuplicateScanServiceTest {
       request.fieldSelections.add(selection);
     }
 
-    DuplicateMergeService.MergeExecutionResult result = HeuristicDuplicateScanController.executeMerge(request);
+    DuplicateMergeService.MergeExecutionResult result;
+    Test.startTest();
+    result = HeuristicDuplicateScanController.executeMerge(request);
+    Test.stopTest();
     System.assertEquals(true, result.success, result.message);
     System.assertEquals(1, result.softMergedCount);
 
@@ -279,5 +282,71 @@ private class HeuristicDuplicateScanServiceTest {
 
     List<HeuristicDuplicateScanService.DuplicateGroup> groups = HeuristicDuplicateScanController.getGroupsForScan(scanId, 10);
     System.assertEquals(0, groups.size());
+  }
+
+  @IsTest
+  static void mergedGroupsForScan_returnsMergeHistoryForSelectedScan() {
+    insert new List<Account>{
+      new Account(Name = 'North Wind Traders', Phone = '2065550199', BillingCity = 'Seattle', Website = 'northwind.example'),
+      new Account(Name = 'Northwind Traders', Phone = '+1 206-555-0199', BillingCity = 'Seattle', Website = 'https://northwind.example'),
+      new Account(Name = 'South Harbor Logistics', Phone = '3035550101', BillingCity = 'Denver', Website = 'southharbor.example')
+    };
+
+    Id scanId;
+    Test.startTest();
+    scanId = HeuristicDuplicateScanController.startScan('Account', 500, 75, true);
+    Test.stopTest();
+
+    List<HeuristicDuplicateScanService.DuplicateGroup> groups = HeuristicDuplicateScanController.getGroupsForScan(scanId, 10);
+    System.assertEquals(1, groups.size());
+
+    List<String> recordIds = new List<String>();
+    for (HeuristicDuplicateScanService.GroupRecord row : groups[0].records) {
+      recordIds.add(row.recordId);
+    }
+
+    DuplicateMergeService.MergeProposal proposal = HeuristicDuplicateScanController.getMergeProposal(
+      'Account',
+      recordIds,
+      recordIds[0]
+    );
+
+    DuplicateMergeService.MergeExecutionRequest request = new DuplicateMergeService.MergeExecutionRequest();
+    request.objectApiName = 'Account';
+    request.survivorRecordId = proposal.survivorRecordId;
+    request.loserRecordIds = new List<String>();
+    request.scanId = String.valueOf(scanId);
+    request.groupId = String.valueOf(groups[0].groupId);
+    request.groupKey = groups[0].groupKey;
+    request.fieldSelections = new List<DuplicateMergeService.FieldSelectionInput>();
+
+    for (DuplicateMergeService.RecordCandidate record : proposal.records) {
+      if (record.recordId != proposal.survivorRecordId) {
+        request.loserRecordIds.add(record.recordId);
+      }
+    }
+
+    for (DuplicateMergeService.FieldProposal fieldProposal : proposal.fields) {
+      DuplicateMergeService.FieldSelectionInput selection = new DuplicateMergeService.FieldSelectionInput();
+      selection.fieldApiName = fieldProposal.fieldApiName;
+      selection.sourceRecordId = fieldProposal.recommendedSourceRecordId;
+      request.fieldSelections.add(selection);
+    }
+
+    DuplicateMergeService.MergeExecutionResult result = HeuristicDuplicateScanController.executeMerge(request);
+    System.assertEquals(true, result.success, result.message);
+
+    List<HeuristicDuplicateScanService.MergedGroupHistory> mergedGroups = HeuristicDuplicateScanController.getMergedGroupsForScan(
+      scanId,
+      10
+    );
+    System.assertEquals(1, mergedGroups.size());
+    System.assertEquals(groups[0].groupId, mergedGroups[0].groupId);
+    System.assertEquals(groups[0].groupKey, mergedGroups[0].groupKey);
+    System.assertEquals('Account', mergedGroups[0].objectApiName);
+    System.assertEquals(1, mergedGroups[0].mergedRecordCount);
+    System.assertEquals(1, mergedGroups[0].mergedRecords.size());
+    System.assertEquals(proposal.survivorRecordId, mergedGroups[0].survivorRecordId);
+    System.assertEquals(request.loserRecordIds[0], mergedGroups[0].mergedRecords[0].sourceRecordId);
   }
 }

@@ -30,6 +30,11 @@ public with sharing class HeuristicDuplicateScanController {
   }
 
   @AuraEnabled
+  public static List<HeuristicDuplicateScanService.MergedGroupHistory> getMergedGroupsForScan(Id scanId, Integer maxRows) {
+    return HeuristicDuplicateScanService.getMergedGroupsForScan(scanId, maxRows);
+  }
+
+  @AuraEnabled
   public static HeuristicDuplicateScanService.GroupDetail getGroupDetail(Id groupId) {
     return HeuristicDuplicateScanService.getGroupDetail(groupId);
   }
@@ -53,13 +58,19 @@ public with sharing class HeuristicDuplicateScanController {
     String objectApiName,
     String survivorRecordId,
     List<String> loserRecordIds,
-    List<DuplicateMergeService.FieldSelectionInput> fieldSelections
+    List<DuplicateMergeService.FieldSelectionInput> fieldSelections,
+    Id scanId,
+    Id groupId,
+    String groupKey
   ) {
     DuplicateMergeService.MergeExecutionRequest request = new DuplicateMergeService.MergeExecutionRequest();
     request.objectApiName = objectApiName;
     request.survivorRecordId = survivorRecordId;
     request.loserRecordIds = loserRecordIds;
     request.fieldSelections = fieldSelections;
+    request.scanId = String.valueOf(scanId);
+    request.groupId = String.valueOf(groupId);
+    request.groupKey = groupKey;
     return DuplicateMergeService.executeMerge(request);
   }
 

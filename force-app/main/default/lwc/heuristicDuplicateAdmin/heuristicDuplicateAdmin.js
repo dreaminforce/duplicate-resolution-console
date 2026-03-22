@@ -6,6 +6,7 @@ import startScan from '@salesforce/apex/HeuristicDuplicateScanController.startSc
 import getScanStatus from '@salesforce/apex/HeuristicDuplicateScanController.getScanStatus';
 import getRecentScans from '@salesforce/apex/HeuristicDuplicateScanController.getRecentScans';
 import getGroupsForScan from '@salesforce/apex/HeuristicDuplicateScanController.getGroupsForScan';
+import getMergedGroupsForScan from '@salesforce/apex/HeuristicDuplicateScanController.getMergedGroupsForScan';
 import getGroupDetail from '@salesforce/apex/HeuristicDuplicateScanController.getGroupDetail';
 import getMergeProposal from '@salesforce/apex/HeuristicDuplicateScanController.getMergeProposal';
 import executeSoftMerge from '@salesforce/apex/HeuristicDuplicateScanController.executeSoftMerge';
@@ -20,6 +21,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
   @track scanStatus;
   @track recentScans = [];
   @track groups = [];
+  @track mergedGroups = [];
   @track detailGroup;
   @track parentPickerOpen = false;
   @track parentOptions = [];
@@ -56,6 +58,22 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
     { label: 'City', fieldName: 'city', type: 'text' },
     { label: 'Website', fieldName: 'website', type: 'text' },
     { label: 'Reason', fieldName: 'reason', type: 'text' }
+  ];
+
+  mergedRecordColumns = [
+    {
+      label: 'Merged Record',
+      fieldName: 'recordUrl',
+      type: 'url',
+      typeAttributes: { label: { fieldName: 'sourceDisplay' } }
+    },
+    { label: 'Status', fieldName: 'softMergeStatus', type: 'text', fixedWidth: 130 },
+    {
+      label: 'Merged Into',
+      fieldName: 'mergedIntoUrl',
+      type: 'url',
+      typeAttributes: { label: { fieldName: 'mergedIntoLabel' } }
+    }
   ];
 
   detailColumns = [
@@ -98,6 +116,10 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
 
   get hasGroups() {
     return this.groups.length > 0;
+  }
+
+  get hasMergedGroups() {
+    return this.mergedGroups.length > 0;
   }
 
   get showCancelButton() {
@@ -271,15 +293,17 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
     if (!this.selectedScanId) {
       this.scanStatus = null;
       this.groups = [];
+      this.mergedGroups = [];
       this.stopPolling();
       return;
     }
 
     this.loading = true;
     try {
-      const [status, groups] = await Promise.all([
+      const [status, groups, mergedGroups] = await Promise.all([
         getScanStatus({ scanId: this.selectedScanId }),
-        getGroupsForScan({ scanId: this.selectedScanId, maxGroups: 40 })
+        getGroupsForScan({ scanId: this.selectedScanId, maxGroups: 40 }),
+        getMergedGroupsForScan({ scanId: this.selectedScanId, maxRows: 40 })
       ]);
 
       this.scanStatus = {
@@ -301,6 +325,23 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
           recordUrl: record.recordId ? `/${record.recordId}` : '#'
         }))
       }));
+
+      this.mergedGroups = (mergedGroups || []).map((group) => {
+        const mergedCount = group.mergedRecordCount || (group.mergedRecords || []).length || 0;
+        return {
+          ...group,
+          sectionLabel: `${group.groupKey || group.mergeRunId} (${mergedCount} merged)`,
+          createdDateLabel: this.formatDate(group.createdDate),
+          survivorUrl: group.survivorRecordId ? `/${group.survivorRecordId}` : '#',
+          mergedRecords: (group.mergedRecords || []).map((record) => ({
+            ...record,
+            sourceDisplay: record.sourceDisplay || record.sourceRecordId,
+            recordUrl: record.sourceRecordId ? `/${record.sourceRecordId}` : '#',
+            mergedIntoUrl: record.mergedIntoRecordId ? `/${record.mergedIntoRecordId}` : '#',
+            mergedIntoLabel: record.mergedIntoRecordId || ''
+          }))
+        };
+      });
 
       if (this.detailGroup) {
         const latestDetail = this.groups.find((group) => String(group.groupId) === String(this.detailGroup.groupId));
@@ -566,7 +607,10 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
         objectApiName: this.detailGroup.objectApiName,
         survivorRecordId,
         loserRecordIds: this.mergeReview.recordIds.filter((recordId) => recordId !== survivorRecordId),
-        fieldSelections
+        fieldSelections,
+        scanId: this.selectedScanId,
+        groupId: this.detailGroup.groupId,
+        groupKey: this.detailGroup.groupKey
       });
 
       this.notify(

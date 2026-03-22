@@ -68,6 +68,9 @@ public with sharing class DuplicateMergeService {
     @AuraEnabled public String survivorRecordId;
     @AuraEnabled public List<String> loserRecordIds;
     @AuraEnabled public List<FieldSelectionInput> fieldSelections;
+    @AuraEnabled public String scanId;
+    @AuraEnabled public String groupId;
+    @AuraEnabled public String groupKey;
   }
 
   public class FieldSelectionInput {
@@ -185,6 +188,9 @@ public with sharing class DuplicateMergeService {
       Object_Api_Name__c = context.objectApiName,
       Survivor_Record_Id__c = String.valueOf(context.survivorId),
       Survivor_Display__c = context.recordsById.get(context.survivorId).displayValue,
+      Scan__c = parseId(request.scanId),
+      Group__c = parseId(request.groupId),
+      Group_Key__c = String.isBlank(request.groupKey) ? null : request.groupKey,
       Status__c = 'In Progress',
       Summary__c = 'Executing survivor-plus-field-resolution merge.'
     );
@@ -1024,21 +1030,14 @@ public with sharing class DuplicateMergeService {
     List<String> allQueryableFields = buildQueryableFieldList(fieldMap);
 
     try {
-      result.recordsById =
-        new Map<Id, SObject>(Database.query('SELECT FIELDS(ALL) FROM ' + objectApiName + ' WHERE Id IN :ids'));
+      String soql = 'SELECT ' + String.join(allQueryableFields, ',') + ' FROM ' + objectApiName + ' WHERE Id IN :ids';
+      result.recordsById = new Map<Id, SObject>(Database.query(soql));
       result.queriedFieldNames = allQueryableFields;
       return result;
     } catch (Exception ignored) {
-      try {
-        String soql = 'SELECT ' + String.join(allQueryableFields, ',') + ' FROM ' + objectApiName + ' WHERE Id IN :ids';
-        result.recordsById = new Map<Id, SObject>(Database.query(soql));
-        result.queriedFieldNames = allQueryableFields;
-        return result;
-      } catch (Exception secondFailure) {
-        result.recordsById = new Map<Id, SObject>(Database.query('SELECT Id FROM ' + objectApiName + ' WHERE Id IN :ids'));
-        result.queriedFieldNames = new List<String>{ 'Id' };
-        return result;
-      }
+      result.recordsById = new Map<Id, SObject>(Database.query('SELECT Id FROM ' + objectApiName + ' WHERE Id IN :ids'));
+      result.queriedFieldNames = new List<String>{ 'Id' };
+      return result;
     }
   }
 
