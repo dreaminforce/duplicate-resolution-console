@@ -2,6 +2,7 @@ public with sharing class DuplicateMergeService {
   private static final Integer MAX_RELATIONSHIP_SCANS = 45;
   private static final Integer MAX_QUERYABLE_FIELDS = 180;
   private static final Integer MAX_SNAPSHOT_LENGTH = 32000;
+  private static final Integer QUERY_LIMIT_RESERVE_FOR_MERGE = 3;
 
   public class MergeProposal {
     @AuraEnabled public String objectApiName;
@@ -131,6 +132,9 @@ public with sharing class DuplicateMergeService {
     public List<String> warnings = new List<String>();
   }
 
+  private class MergeExecutionException extends Exception {
+  }
+
   public static MergeProposal getMergeProposal(String objectApiName, List<String> recordIds, String preferredSurvivorId) {
     Set<Id> ids = coerceIds(recordIds);
     Id preferredId = parseId(preferredSurvivorId);
@@ -191,7 +195,13 @@ public with sharing class DuplicateMergeService {
       MergeProposal proposal = toProposal(context);
       SObject survivorUpdate = applySelectedFieldValues(context, proposal, selectionByField, result);
       if (!isEmptyUpdate(survivorUpdate)) {
-        update survivorUpdate;
+        Database.SaveResult survivorSave = Database.update(
+          new List<SObject>{ survivorUpdate },
+          buildDuplicateRuleBypassOptions()
+        )[0];
+        if (!survivorSave.isSuccess()) {
+          throw buildDmlException('Survivor update failed', survivorSave);
+        }
       }
 
       result.reparentedRecordCount = reparentRelatedRecords(context, loserRecords, result.errors, result.warnings);
@@ -563,6 +573,13 @@ public with sharing class DuplicateMergeService {
     }
 
     for (RelationshipPlan plan : context.relationshipPlans) {
+      if (!hasRemainingQueryBudget(QUERY_LIMIT_RESERVE_FOR_MERGE)) {
+        warnings.add(
+          'Related record reparenting stopped early because the transaction is near the SOQL query limit.'
+        );
+        break;
+      }
+
       try {
         String soql =
           'SELECT Id,' +
@@ -612,6 +629,11 @@ public with sharing class DuplicateMergeService {
     }
 
     return moved;
+  }
+
+  private static Boolean hasRemainingQueryBudget(Integer reserveQueries) {
+    Integer reserve = reserveQueries == null || reserveQueries < 0 ? 0 : reserveQueries;
+    return Limits.getQueries() < (Limits.getLimitQueries() - reserve);
   }
 
   private static Integer upsertSoftMergeRegistry(
@@ -697,7 +719,7 @@ public with sharing class DuplicateMergeService {
       return;
     }
 
-    Database.SaveResult[] saveResults = Database.update(updates, false);
+    Database.SaveResult[] saveResults = Database.update(updates, buildDuplicateRuleBypassOptions());
     for (Integer i = 0; i < saveResults.size(); i++) {
       if (saveResults[i].isSuccess()) {
         continue;
@@ -706,6 +728,26 @@ public with sharing class DuplicateMergeService {
         warnings.add('Native soft-merge marker update failed for ' + String.valueOf(updates[i].get('Id')) + ': ' + err.getMessage());
       }
     }
+  }
+
+  private static Database.DMLOptions buildDuplicateRuleBypassOptions() {
+    Database.DMLOptions dmlOptions = new Database.DMLOptions();
+    dmlOptions.DuplicateRuleHeader.allowSave = true;
+    dmlOptions.DuplicateRuleHeader.runAsCurrentUser = true;
+    dmlOptions.optAllOrNone = false;
+    return dmlOptions;
+  }
+
+  private static MergeExecutionException buildDmlException(String prefix, Database.SaveResult saveResult) {
+    String message = prefix;
+    if (saveResult != null && saveResult.getErrors() != null && !saveResult.getErrors().isEmpty()) {
+      List<String> parts = new List<String>();
+      for (Database.Error err : saveResult.getErrors()) {
+        parts.add(err.getStatusCode() + ': ' + err.getMessage());
+      }
+      message += ': ' + String.join(parts, ' | ');
+    }
+    return new MergeExecutionException(message);
   }
 
   private static RelationshipCountContext countRelatedRecords(Schema.DescribeSObjectResult describeResult, Set<Id> recordIds) {
