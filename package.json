@@ -1,8 +1,13 @@
 {
-  "name": "salesforce-app",
+  "name": "duplicate-resolution-console",
   "private": true,
   "version": "1.0.0",
-  "description": "Salesforce App",
+  "description": "Duplicate Resolution Console for Salesforce",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dreaminforce/duplicate-resolution-console.git"
+  },
   "scripts": {
     "lint": "eslint **/{aura,lwc}/**/*.js",
     "test": "npm run test:unit",
