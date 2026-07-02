@@ -14,14 +14,29 @@
     <enabled>true</enabled>
   </classAccesses>
   <classAccesses>
+    <apexClass>HeuristicDuplicateBucketAnalysisBatch</apexClass>
+    <enabled>true</enabled>
+  </classAccesses>
+  <classAccesses>
+    <apexClass>HeuristicDuplicateCandidateCleanupBatch</apexClass>
+    <enabled>true</enabled>
+  </classAccesses>
+  <classAccesses>
+    <apexClass>HeuristicDuplicatePairCleanupBatch</apexClass>
+    <enabled>true</enabled>
+  </classAccesses>
+  <classAccesses>
+    <apexClass>HeuristicDuplicatePairConsolidationBatch</apexClass>
+    <enabled>true</enabled>
+  </classAccesses>
+  <classAccesses>
+    <apexClass>HeuristicDuplicateGroupPersistBatch</apexClass>
+    <enabled>true</enabled>
+  </classAccesses>
+  <classAccesses>
     <apexClass>DuplicateMergeService</apexClass>
     <enabled>true</enabled>
   </classAccesses>
-  <applicationVisibilities>
-    <application>Duplicate_Resolution</application>
-    <visible>true</visible>
-  </applicationVisibilities>
-
   <fieldPermissions>
     <editable>true</editable>
     <field>Heuristic_Duplicate_Scan__c.Candidate_Pairs__c</field>
@@ -187,6 +202,158 @@
 
   <fieldPermissions>
     <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Bucket_Key__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.City__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.City_Normalized__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Display_Value__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Domain_Normalized__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Email_Normalized__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Name_Compact__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Name_Normalized__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Object_Api_Name__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Phone__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Phone_Normalized__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Record_Id__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Scan__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Street_Normalized__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Candidate__c.Website__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Left_City__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Left_Display_Value__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Left_Phone__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Left_Record_Id__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Left_Website__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Object_Api_Name__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Pair_Key__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Reason__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Right_City__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Right_Display_Value__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Right_Phone__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Right_Record_Id__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Right_Website__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Scan__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+  <fieldPermissions>
+    <editable>true</editable>
+    <field>Heuristic_Duplicate_Pair__c.Score__c</field>
+    <readable>true</readable>
+  </fieldPermissions>
+
+  <fieldPermissions>
+    <editable>true</editable>
     <field>Duplicate_Merge_Run__c.Group__c</field>
     <readable>true</readable>
   </fieldPermissions>
@@ -230,6 +397,24 @@
   </objectPermissions>
   <objectPermissions>
     <allowCreate>true</allowCreate>
+    <allowDelete>true</allowDelete>
+    <allowEdit>true</allowEdit>
+    <allowRead>true</allowRead>
+    <modifyAllRecords>false</modifyAllRecords>
+    <object>Heuristic_Duplicate_Candidate__c</object>
+    <viewAllRecords>false</viewAllRecords>
+  </objectPermissions>
+  <objectPermissions>
+    <allowCreate>true</allowCreate>
+    <allowDelete>true</allowDelete>
+    <allowEdit>true</allowEdit>
+    <allowRead>true</allowRead>
+    <modifyAllRecords>false</modifyAllRecords>
+    <object>Heuristic_Duplicate_Pair__c</object>
+    <viewAllRecords>false</viewAllRecords>
+  </objectPermissions>
+  <objectPermissions>
+    <allowCreate>true</allowCreate>
     <allowDelete>false</allowDelete>
     <allowEdit>true</allowEdit>
     <allowRead>true</allowRead>
@@ -246,10 +431,6 @@
     <object>Duplicate_Merge_Record__c</object>
     <viewAllRecords>false</viewAllRecords>
   </objectPermissions>
-  <tabSettings>
-    <tab>Duplicate_Resolution_Console</tab>
-    <visibility>Visible</visibility>
-  </tabSettings>
   <tabSettings>
     <tab>Heuristic_Duplicate_Admin</tab>
     <visibility>Visible</visibility>

@@ -1,11 +1,14 @@
 public with sharing class OpenAiResponsesClient {
-  // Test toggle: true = Named Credential, false = hardcoded endpoint + API key.
+  // Transport mode: true = Named Credential, false = endpoint and API key from Custom Labels.
   private static final Boolean USE_NAMED_CREDENTIAL = false;
 
   private static final String NAMED_CREDENTIAL = 'OpenAI';
   private static final String NAMED_CREDENTIAL_ENDPOINT = 'callout:' + NAMED_CREDENTIAL + '/v1/responses';
   private static final String MODEL = 'gpt-4.1-mini';
   private static final Integer MAX_ERROR_BODY_LEN = 450;
+
+  @TestVisible private static String endpointOverrideForTest;
+  @TestVisible private static String apiKeyOverrideForTest;
 
   public class OpenAiClientException extends Exception {}
 
@@ -96,8 +99,12 @@ public with sharing class OpenAiResponsesClient {
       return;
     }
 
-    String hardcodedEndpoint = Label.OpenAI_Hardcoded_Endpoint;
-    String hardcodedApiKey = Label.OpenAI_Hardcoded_API_Key;
+    String hardcodedEndpoint = String.isBlank(endpointOverrideForTest)
+      ? Label.OpenAI_Hardcoded_Endpoint
+      : endpointOverrideForTest;
+    String hardcodedApiKey = String.isBlank(apiKeyOverrideForTest)
+      ? Label.OpenAI_Hardcoded_API_Key
+      : apiKeyOverrideForTest;
 
     if (String.isBlank(hardcodedEndpoint) || String.isBlank(hardcodedApiKey) || hardcodedApiKey == 'REPLACE_ME') {
       throw new OpenAiClientException(

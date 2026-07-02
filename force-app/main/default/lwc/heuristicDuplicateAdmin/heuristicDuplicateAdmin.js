@@ -14,6 +14,20 @@ import cancelScan from '@salesforce/apex/HeuristicDuplicateScanController.cancel
 
 const COMPARISON_VALUE_LIMIT = 160;
 const RECORD_LINK_LABEL_LIMIT = 48;
+const BULK_PIPELINE_RECORD_LIMIT = 5000;
+const PIPELINE_STAGES = [
+  { key: 'collect', label: 'Collect Records' },
+  { key: 'analyze', label: 'Analyze Buckets' },
+  { key: 'consolidate', label: 'Consolidate Pairs' },
+  { key: 'persist', label: 'Persist Groups' }
+];
+const PHASE_LABELS = {
+  collect: 'Collecting records',
+  analyze: 'Analyzing buckets',
+  consolidate: 'Consolidating matched pairs',
+  persist: 'Persisting duplicate groups',
+  cleanup: 'Cleaning temporary rows'
+};
 
 export default class HeuristicDuplicateAdmin extends LightningElement {
   @track objectOptions = [];
@@ -35,7 +49,7 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
   mergeReviewVisible = false;
 
   selectedScanId;
-  maxRecords = 2000;
+  maxRecords = 50000;
   scoreThreshold = 78;
   clearPreviousFlags = true;
 
@@ -276,9 +290,11 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       const rows = await getRecentScans({ maxRows: 15 });
       this.recentScans = (rows || []).map((row) => ({
         ...row,
-        statusLabel: row.asyncStatus ? `${row.status} (${row.asyncStatus})` : row.status,
+        statusLabel: this.buildStatusLabel(row),
         createdDateLabel: this.formatDate(row.createdDate),
-        objectNameLabel: row.objectLabel || row.objectApiName || 'Unknown Object'
+        objectNameLabel: row.objectLabel || row.objectApiName || 'Unknown Object',
+        phaseLabel: this.resolvePhaseLabel(row),
+        resultSummaryLabel: this.buildResultSummaryLabel(row)
       }));
 
       if (!this.selectedScanId && this.recentScans.length) {
@@ -312,7 +328,13 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
         startedAtLabel: this.formatDate(status.startedAt),
         completedAtLabel: this.formatDate(status.completedAt),
         heartbeatLabel: this.formatDate(status.lastHeartbeat),
-        objectNameLabel: status.objectLabel || status.objectApiName || 'Unknown Object'
+        objectNameLabel: status.objectLabel || status.objectApiName || 'Unknown Object',
+        phaseLabel: this.resolvePhaseLabel(status),
+        processingPathLabel: this.resolveProcessingPathLabel(status),
+        asyncJobLabel: this.buildAsyncJobLabel(status),
+        asyncProgressLabel: this.buildAsyncProgressLabel(status),
+        resultSummaryLabel: this.buildResultSummaryLabel(status),
+        pipelineSteps: this.buildPipelineSteps(status)
       };
 
       this.selectedObject = status.objectApiName || this.selectedObject;
@@ -756,6 +778,119 @@ export default class HeuristicDuplicateAdmin extends LightningElement {
       this.mergeReview = null;
       this.mergeReviewVisible = false;
     }
+  }
+
+  buildStatusLabel(status) {
+    if (!status) {
+      return '-';
+    }
+
+    const base = status.status || '-';
+    return status.asyncStatus ? `${base} (${status.asyncStatus})` : base;
+  }
+
+  buildResultSummaryLabel(status) {
+    const groups = status && status.flaggedGroups !== undefined ? status.flaggedGroups : 0;
+    const records = status && status.flaggedRecords !== undefined ? status.flaggedRecords : 0;
+    const comparisons = status && status.candidatePairs !== undefined ? status.candidatePairs : 0;
+    return `Groups: ${groups} | Records: ${records} | Comparisons: ${comparisons}`;
+  }
+
+  buildAsyncJobLabel(status) {
+    if (!status || !status.asyncClassName) {
+      return '-';
+    }
+    return status.asyncStatus ? `${status.asyncClassName} (${status.asyncStatus})` : status.asyncClassName;
+  }
+
+  buildAsyncProgressLabel(status) {
+    if (!status || !status.asyncTotalItems) {
+      return '-';
+    }
+    const processed = status.asyncItemsProcessed || 0;
+    return `${processed} / ${status.asyncTotalItems} batches`;
+  }
+
+  resolveProcessingPathLabel(status) {
+    const maxRecords = status && status.maxRecords ? Number(status.maxRecords) : 0;
+    return maxRecords > BULK_PIPELINE_RECORD_LIMIT ? 'Bulk bucket pipeline' : 'Inline scan';
+  }
+
+  resolvePhaseLabel(status) {
+    if (!status) {
+      return '-';
+    }
+
+    const state = (status.status || '').toLowerCase();
+    if (state === 'completed') {
+      return 'Completed';
+    }
+    if (state === 'failed') {
+      return `Failed${status.asyncClassName ? ` during ${this.resolvePhaseFromClass(status.asyncClassName)}` : ''}`;
+    }
+    if (state === 'cancelled') {
+      return 'Cancelled';
+    }
+    if (state === 'queued') {
+      return 'Queued';
+    }
+
+    const phaseKey = this.resolvePhaseKey(status);
+    return PHASE_LABELS[phaseKey] || 'Running';
+  }
+
+  resolvePhaseKey(status) {
+    const className = status && status.asyncClassName ? status.asyncClassName : '';
+    if (className.includes('HeuristicDuplicateScanBatch')) {
+      return 'collect';
+    }
+    if (className.includes('HeuristicDuplicateBucketAnalysisBatch')) {
+      return 'analyze';
+    }
+    if (className.includes('HeuristicDuplicatePairConsolidationBatch')) {
+      return 'consolidate';
+    }
+    if (className.includes('HeuristicDuplicateGroupPersistBatch')) {
+      return 'persist';
+    }
+    if (
+      className.includes('HeuristicDuplicateCandidateCleanupBatch') ||
+      className.includes('HeuristicDuplicatePairCleanupBatch')
+    ) {
+      return 'cleanup';
+    }
+    return null;
+  }
+
+  resolvePhaseFromClass(className) {
+    const phaseKey = this.resolvePhaseKey({ asyncClassName: className });
+    return PHASE_LABELS[phaseKey] || 'current stage';
+  }
+
+  buildPipelineSteps(status) {
+    const terminalStatus = (status && status.status ? status.status : '').toLowerCase();
+    const activeKey = this.resolvePhaseKey(status);
+    const activeIndex = PIPELINE_STAGES.findIndex((stage) => stage.key === activeKey);
+
+    return PIPELINE_STAGES.map((stage, index) => {
+      let state = 'pending';
+      if (terminalStatus === 'completed') {
+        state = 'complete';
+      } else if (terminalStatus === 'failed' && stage.key === activeKey) {
+        state = 'error';
+      } else if (terminalStatus === 'cancelled' && stage.key === activeKey) {
+        state = 'error';
+      } else if (stage.key === activeKey) {
+        state = 'active';
+      } else if (activeIndex > index) {
+        state = 'complete';
+      }
+
+      return {
+        ...stage,
+        className: `pipeline-step ${state}`
+      };
+    });
   }
 
   getExecutableSurvivorId() {

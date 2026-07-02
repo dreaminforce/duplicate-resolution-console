@@ -14,7 +14,7 @@ This README was aligned to the current codebase on 2026-03-28.
 Notable current-state details:
 
 - the project name in [`sfdx-project.json`](./sfdx-project.json) is `Duplicate Resolution Console`
-- the repo includes a unified Lightning app page and separate exposed LWCs for the AI and heuristic flows
+- the repo includes a unified Lightning app/tab and separate exposed LWCs for the matching-rule and heuristic flows
 - the repo now includes an MIT `LICENSE` file for public/open-source use
 - the OpenAI Apex client is currently configured to use Custom Labels by default, not a Named Credential
 
@@ -30,13 +30,17 @@ Notable current-state details:
 ### Heuristic workflow
 
 1. [`HeuristicDuplicateScanController.cls`](./force-app/main/default/classes/HeuristicDuplicateScanController.cls) starts an async scan for one selected object at a time.
-2. [`HeuristicDuplicateScanBatch.cls`](./force-app/main/default/classes/HeuristicDuplicateScanBatch.cls) scores likely duplicates.
-3. Results are stored in:
+2. [`HeuristicDuplicateScanBatch.cls`](./force-app/main/default/classes/HeuristicDuplicateScanBatch.cls) streams records into lightweight candidate buckets.
+3. [`HeuristicDuplicateBucketAnalysisBatch.cls`](./force-app/main/default/classes/HeuristicDuplicateBucketAnalysisBatch.cls) analyzes those buckets and writes matched-pair evidence for larger scans.
+4. [`HeuristicDuplicatePairConsolidationBatch.cls`](./force-app/main/default/classes/HeuristicDuplicatePairConsolidationBatch.cls) merges overlapping pairs into final duplicate groups.
+5. [`HeuristicDuplicateGroupPersistBatch.cls`](./force-app/main/default/classes/HeuristicDuplicateGroupPersistBatch.cls) writes final groups and members in a separate batch phase.
+6. Results are stored in:
    - `Heuristic_Duplicate_Scan__c`
    - `Heuristic_Duplicate_Group__c`
    - `Heuristic_Duplicate_Member__c`
-4. [`heuristicDuplicateAdmin`](./force-app/main/default/lwc/heuristicDuplicateAdmin/heuristicDuplicateAdmin.js) shows scan history, flagged groups, and merged-group history.
-5. The same merge service is reused for survivor selection and field-level merge execution.
+7. Temporary candidate rows are stored in `Heuristic_Duplicate_Candidate__c`, and temporary matched pairs are stored in `Heuristic_Duplicate_Pair__c`.
+8. [`heuristicDuplicateAdmin`](./force-app/main/default/lwc/heuristicDuplicateAdmin/heuristicDuplicateAdmin.js) shows scan history, flagged groups, and merged-group history.
+9. The same merge service is reused for survivor selection and field-level merge execution.
 
 ## Main metadata in this repo
 
@@ -48,6 +52,11 @@ Notable current-state details:
 - [`HeuristicDuplicateScanController.cls`](./force-app/main/default/classes/HeuristicDuplicateScanController.cls)
 - [`HeuristicDuplicateScanService.cls`](./force-app/main/default/classes/HeuristicDuplicateScanService.cls)
 - [`HeuristicDuplicateScanBatch.cls`](./force-app/main/default/classes/HeuristicDuplicateScanBatch.cls)
+- [`HeuristicDuplicateBucketAnalysisBatch.cls`](./force-app/main/default/classes/HeuristicDuplicateBucketAnalysisBatch.cls)
+- [`HeuristicDuplicateCandidateCleanupBatch.cls`](./force-app/main/default/classes/HeuristicDuplicateCandidateCleanupBatch.cls)
+- [`HeuristicDuplicatePairCleanupBatch.cls`](./force-app/main/default/classes/HeuristicDuplicatePairCleanupBatch.cls)
+- [`HeuristicDuplicatePairConsolidationBatch.cls`](./force-app/main/default/classes/HeuristicDuplicatePairConsolidationBatch.cls)
+- [`HeuristicDuplicateGroupPersistBatch.cls`](./force-app/main/default/classes/HeuristicDuplicateGroupPersistBatch.cls)
 - [`OpenAiResponsesClient.cls`](./force-app/main/default/classes/OpenAiResponsesClient.cls)
 
 ### Lightning Web Components
@@ -73,6 +82,8 @@ Notable current-state details:
 - [`Heuristic_Duplicate_Scan__c`](./force-app/main/default/objects/Heuristic_Duplicate_Scan__c/Heuristic_Duplicate_Scan__c.object-meta.xml)
 - [`Heuristic_Duplicate_Group__c`](./force-app/main/default/objects/Heuristic_Duplicate_Group__c/Heuristic_Duplicate_Group__c.object-meta.xml)
 - [`Heuristic_Duplicate_Member__c`](./force-app/main/default/objects/Heuristic_Duplicate_Member__c/Heuristic_Duplicate_Member__c.object-meta.xml)
+- [`Heuristic_Duplicate_Candidate__c`](./force-app/main/default/objects/Heuristic_Duplicate_Candidate__c/Heuristic_Duplicate_Candidate__c.object-meta.xml)
+- [`Heuristic_Duplicate_Pair__c`](./force-app/main/default/objects/Heuristic_Duplicate_Pair__c/Heuristic_Duplicate_Pair__c.object-meta.xml)
 
 ## OpenAI configuration
 
@@ -134,7 +145,7 @@ npm run prettier:verify
 Notes:
 
 - Jest tooling for LWC is configured, but this repo currently does not include committed LWC Jest test files
-- there is one Apex test class in [`HeuristicDuplicateScanServiceTest.cls`](./force-app/main/default/classes/HeuristicDuplicateScanServiceTest.cls)
+- Apex coverage is split across [`DuplicateAiServiceTest.cls`](./force-app/main/default/classes/DuplicateAiServiceTest.cls) and [`HeuristicDuplicateScanServiceTest.cls`](./force-app/main/default/classes/HeuristicDuplicateScanServiceTest.cls)
 
 ## Known documentation notes
 

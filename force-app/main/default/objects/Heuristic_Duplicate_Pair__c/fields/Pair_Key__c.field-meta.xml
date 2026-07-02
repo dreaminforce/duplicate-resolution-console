@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
-  <fullName>Candidate_Pairs__c</fullName>
-  <label>Candidate Comparisons</label>
-  <precision>18</precision>
+  <fullName>Pair_Key__c</fullName>
+  <externalId>true</externalId>
+  <label>Pair Key</label>
+  <length>80</length>
   <required>false</required>
-  <scale>0</scale>
   <trackTrending>false</trackTrending>
-  <type>Number</type>
+  <type>Text</type>
+  <unique>true</unique>
 </CustomField>

@@ -1,5 +1,6 @@
 public with sharing class HeuristicDuplicateScanBatch implements Database.Batchable<SObject>, Database.Stateful {
   private static final Integer MAX_PREVIOUS_SCAN_ROWS_TO_CLEAR = 9000;
+  private static final Integer INLINE_ANALYSIS_RECORD_LIMIT = 5000;
 
   private Id scanId;
   private String objectApiName;
@@ -84,8 +85,20 @@ public with sharing class HeuristicDuplicateScanBatch implements Database.Batcha
   }
 
   public void execute(Database.BatchableContext bc, List<SObject> scope) {
+    List<Heuristic_Duplicate_Candidate__c> stagedCandidates = new List<Heuristic_Duplicate_Candidate__c>();
+    Boolean keepInlineCandidates = maxRecords == null || maxRecords <= INLINE_ANALYSIS_RECORD_LIMIT;
+
     for (SObject row : scope) {
-      candidates.add(toCandidate(row));
+      CandidateRecord candidate = toCandidate(row);
+      if (keepInlineCandidates) {
+        candidates.add(candidate);
+      } else {
+        stagedCandidates.addAll(toCandidateRows(candidate));
+      }
+    }
+
+    if (!stagedCandidates.isEmpty()) {
+      Database.insert(stagedCandidates, false);
     }
 
     processedCount += scope.size();
@@ -97,6 +110,22 @@ public with sharing class HeuristicDuplicateScanBatch implements Database.Batcha
     try {
       if (clearPreviousResults == true) {
         clearPriorResults();
+      }
+
+      if (maxRecords != null && maxRecords > INLINE_ANALYSIS_RECORD_LIMIT) {
+        Id analysisJobId = Database.executeBatch(
+          new HeuristicDuplicateBucketAnalysisBatch(scanId, objectApiName, objectLabel, threshold, processedCount),
+          1000
+        );
+
+        update new Heuristic_Duplicate_Scan__c(
+          Id = scanId,
+          Job_Id__c = String.valueOf(analysisJobId),
+          Total_Accounts__c = processedCount,
+          Processed_Accounts__c = processedCount,
+          Last_Heartbeat__c = System.now()
+        );
+        return;
       }
 
       ScanComputation result = analyzeCandidates();
@@ -124,10 +153,11 @@ public with sharing class HeuristicDuplicateScanBatch implements Database.Batcha
         Status__c = 'Failed',
         Completed_At__c = System.now(),
         Last_Heartbeat__c = System.now(),
-        Total_Accounts__c = candidates.size(),
+        Total_Accounts__c = processedCount,
         Processed_Accounts__c = processedCount,
         Error_Message__c = failure
       );
+      Database.executeBatch(new HeuristicDuplicateCandidateCleanupBatch(scanId), 2000);
     }
   }
 
@@ -159,6 +189,8 @@ public with sharing class HeuristicDuplicateScanBatch implements Database.Batcha
 
     deleteInChunks('Heuristic_Duplicate_Member__c', 'Scan__c', previousScanIds, MAX_PREVIOUS_SCAN_ROWS_TO_CLEAR);
     deleteInChunks('Heuristic_Duplicate_Group__c', 'Scan__c', previousScanIds, MAX_PREVIOUS_SCAN_ROWS_TO_CLEAR);
+    deleteInChunks('Heuristic_Duplicate_Candidate__c', 'Scan__c', previousScanIds, MAX_PREVIOUS_SCAN_ROWS_TO_CLEAR);
+    deleteInChunks('Heuristic_Duplicate_Pair__c', 'Scan__c', previousScanIds, MAX_PREVIOUS_SCAN_ROWS_TO_CLEAR);
     deleteInChunks('Heuristic_Duplicate_Scan__c', 'Id', previousScanIds, 200);
   }
 
@@ -373,6 +405,46 @@ public with sharing class HeuristicDuplicateScanBatch implements Database.Batcha
     return out;
   }
 
+  private List<Heuristic_Duplicate_Candidate__c> toCandidateRows(CandidateRecord candidate) {
+    List<Heuristic_Duplicate_Candidate__c> rows = new List<Heuristic_Duplicate_Candidate__c>();
+    Set<String> keys = new Set<String>();
+    addCandidateRow(rows, keys, keyFromName(candidate), candidate);
+    addCandidateRow(rows, keys, keyFromPhone(candidate), candidate);
+    addCandidateRow(rows, keys, keyFromEmail(candidate), candidate);
+    addCandidateRow(rows, keys, keyFromDomain(candidate), candidate);
+    return rows;
+  }
+
+  private void addCandidateRow(
+    List<Heuristic_Duplicate_Candidate__c> rows,
+    Set<String> keys,
+    String key,
+    CandidateRecord candidate
+  ) {
+    if (String.isBlank(key) || keys.contains(key)) {
+      return;
+    }
+    keys.add(key);
+
+    Heuristic_Duplicate_Candidate__c row = new Heuristic_Duplicate_Candidate__c();
+    row.Scan__c = scanId;
+    row.Object_Api_Name__c = objectApiName;
+    row.Record_Id__c = String.valueOf(candidate.id);
+    row.Bucket_Key__c = truncate(key, 255);
+    row.Display_Value__c = truncate(candidate.displayValue, 255);
+    row.Name_Normalized__c = truncate(candidate.nameNorm, 255);
+    row.Name_Compact__c = truncate(candidate.nameCompact, 255);
+    row.Phone__c = truncate(candidate.phoneValue, 80);
+    row.Phone_Normalized__c = truncate(candidate.phoneNorm, 40);
+    row.Email_Normalized__c = truncate(candidate.emailNorm, 255);
+    row.Website__c = truncate(candidate.websiteValue, 255);
+    row.Domain_Normalized__c = truncate(candidate.domainNorm, 255);
+    row.City__c = truncate(candidate.cityValue, 120);
+    row.City_Normalized__c = truncate(candidate.cityNorm, 120);
+    row.Street_Normalized__c = truncate(candidate.streetNorm, 255);
+    rows.add(row);
+  }
+
   private static void addToBucket(Map<String, List<CandidateRecord>> out, String key, CandidateRecord row) {
     if (String.isBlank(key)) {
       return;
@@ -436,12 +508,10 @@ public with sharing class HeuristicDuplicateScanBatch implements Database.Batcha
     if (!String.isBlank(left.phoneNorm) && left.phoneNorm == right.phoneNorm) {
       score += 25;
       reasons.add('Phone exact');
-    } else if (!String.isBlank(left.phoneNorm) && !String.isBlank(right.phoneNorm)) {
-      score -= 10;
     }
 
     if (!String.isBlank(left.domainNorm) && left.domainNorm == right.domainNorm) {
-      score += 18;
+      score += 25;
       reasons.add('Domain exact');
     } else if (!String.isBlank(left.domainNorm) && !String.isBlank(right.domainNorm)) {
       score -= 8;
@@ -492,6 +562,10 @@ public with sharing class HeuristicDuplicateScanBatch implements Database.Batcha
       score += 18;
     }
 
+    if (hasTokenSubset(leftName, rightName)) {
+      score += 18;
+    }
+
     if (
       (leftCompact.contains(rightCompact) || rightCompact.contains(leftCompact)) &&
       Math.min(leftCompact.length(), rightCompact.length()) >= 6
@@ -522,6 +596,27 @@ public with sharing class HeuristicDuplicateScanBatch implements Database.Batcha
     }
 
     return (Integer) Math.floor(((Decimal) matches * 100) / denominator);
+  }
+
+  private static Boolean hasTokenSubset(String leftName, String rightName) {
+    Set<String> leftTokens = tokenize(leftName);
+    Set<String> rightTokens = tokenize(rightName);
+    if (leftTokens.size() < 2 || rightTokens.size() < 2 || leftTokens.size() == rightTokens.size()) {
+      return false;
+    }
+
+    return leftTokens.size() < rightTokens.size()
+      ? containsAllTokens(rightTokens, leftTokens)
+      : containsAllTokens(leftTokens, rightTokens);
+  }
+
+  private static Boolean containsAllTokens(Set<String> source, Set<String> required) {
+    for (String token : required) {
+      if (!source.contains(token)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private static Set<String> tokenize(String value) {
@@ -885,6 +980,13 @@ public with sharing class HeuristicDuplicateScanBatch implements Database.Batcha
     }
 
     return '';
+  }
+
+  private static String truncate(String value, Integer maxLength) {
+    if (value == null || maxLength == null || maxLength <= 0 || value.length() <= maxLength) {
+      return value;
+    }
+    return value.substring(0, maxLength);
   }
 
   private static String describeException(Exception ex) {

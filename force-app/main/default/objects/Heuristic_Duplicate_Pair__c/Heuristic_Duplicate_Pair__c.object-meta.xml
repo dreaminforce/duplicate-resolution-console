@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+  <deploymentStatus>Deployed</deploymentStatus>
+  <enableActivities>false</enableActivities>
+  <enableBulkApi>true</enableBulkApi>
+  <enableFeeds>false</enableFeeds>
+  <enableHistory>false</enableHistory>
+  <enableReports>false</enableReports>
+  <enableSearch>false</enableSearch>
+  <enableSharing>true</enableSharing>
+  <label>Heuristic Duplicate Pair</label>
+  <nameField>
+    <displayFormat>HDP-{000000}</displayFormat>
+    <label>Pair Number</label>
+    <type>AutoNumber</type>
+  </nameField>
+  <pluralLabel>Heuristic Duplicate Pairs</pluralLabel>
+  <sharingModel>ReadWrite</sharingModel>
+</CustomObject>

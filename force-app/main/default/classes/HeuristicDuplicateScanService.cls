@@ -1,6 +1,6 @@
 public with sharing class HeuristicDuplicateScanService {
-  public static final Integer DEFAULT_MAX_RECORDS = 2000;
-  public static final Integer MAX_RECORDS_HARD_LIMIT = 5000;
+  public static final Integer DEFAULT_MAX_RECORDS = 50000;
+  public static final Integer MAX_RECORDS_HARD_LIMIT = 400000;
   public static final Integer DEFAULT_THRESHOLD = 78;
 
   public class ObjectOption {
@@ -29,6 +29,7 @@ public with sharing class HeuristicDuplicateScanService {
     @AuraEnabled public Boolean clearPreviousFlags;
     @AuraEnabled public String errorMessage;
     @AuraEnabled public String asyncStatus;
+    @AuraEnabled public String asyncClassName;
     @AuraEnabled public Integer asyncItemsProcessed;
     @AuraEnabled public Integer asyncTotalItems;
   }
@@ -497,13 +498,57 @@ public with sharing class HeuristicDuplicateScanService {
   }
 
   public static ActionResult mergeRecords(String objectApiName, Id parentRecordId, List<Id> childRecordIds) {
-    DuplicateAiService.ActionResult source = DuplicateAiService.mergeRecords(objectApiName, parentRecordId, childRecordIds);
-
     ActionResult result = new ActionResult();
-    result.success = source.success;
-    result.message = source.message;
-    result.processedCount = source.processedCount;
-    result.errors = source.errors;
+    result.success = false;
+    result.processedCount = 0;
+    result.errors = new List<String>();
+
+    if (String.isBlank(objectApiName) || parentRecordId == null || childRecordIds == null || childRecordIds.isEmpty()) {
+      result.message = 'Object, parent record, and at least one child record are required.';
+      result.errors.add(result.message);
+      return result;
+    }
+
+    List<String> recordIds = new List<String>{ String.valueOf(parentRecordId) };
+    List<String> loserRecordIds = new List<String>();
+    for (Id childRecordId : childRecordIds) {
+      if (childRecordId == null || childRecordId == parentRecordId) {
+        continue;
+      }
+      String child = String.valueOf(childRecordId);
+      recordIds.add(child);
+      loserRecordIds.add(child);
+    }
+
+    if (loserRecordIds.isEmpty()) {
+      result.message = 'At least one child record different from the parent is required.';
+      result.errors.add(result.message);
+      return result;
+    }
+
+    DuplicateMergeService.MergeProposal proposal = DuplicateMergeService.getMergeProposal(
+      objectApiName,
+      recordIds,
+      String.valueOf(parentRecordId)
+    );
+
+    DuplicateMergeService.MergeExecutionRequest request = new DuplicateMergeService.MergeExecutionRequest();
+    request.objectApiName = objectApiName;
+    request.survivorRecordId = String.valueOf(parentRecordId);
+    request.loserRecordIds = loserRecordIds;
+    request.fieldSelections = new List<DuplicateMergeService.FieldSelectionInput>();
+    for (DuplicateMergeService.FieldProposal fieldProposal : proposal.fields) {
+      DuplicateMergeService.FieldSelectionInput selection = new DuplicateMergeService.FieldSelectionInput();
+      selection.fieldApiName = fieldProposal.fieldApiName;
+      selection.sourceRecordId = fieldProposal.recommendedSourceRecordId;
+      request.fieldSelections.add(selection);
+    }
+
+    DuplicateMergeService.MergeExecutionResult execution = DuplicateMergeService.executeMerge(request);
+    result.success = execution.success;
+    result.message = execution.message;
+    result.processedCount = execution.softMergedCount;
+    result.errors = execution.errors;
     return result;
   }
 
@@ -540,9 +585,10 @@ public with sharing class HeuristicDuplicateScanService {
         Completed_At__c = System.now(),
         Error_Message__c = 'Cancelled by admin.'
       );
+      Database.executeBatch(new HeuristicDuplicateCandidateCleanupBatch(scan.Id), 2000);
 
       result.success = true;
-      result.message = 'Scan cancelled.';
+      result.message = 'Scan cancelled. Temporary candidate cleanup queued.';
       return result;
     } catch (Exception ex) {
       result.success = false;
@@ -575,6 +621,7 @@ public with sharing class HeuristicDuplicateScanService {
 
     if (job != null) {
       dto.asyncStatus = job.Status;
+      dto.asyncClassName = job.ApexClass == null ? null : job.ApexClass.Name;
       dto.asyncItemsProcessed = job.JobItemsProcessed;
       dto.asyncTotalItems = job.TotalJobItems;
     }
@@ -601,7 +648,7 @@ public with sharing class HeuristicDuplicateScanService {
 
     try {
       for (AsyncApexJob job : [
-        SELECT Id, Status, JobItemsProcessed, TotalJobItems
+        SELECT Id, Status, JobItemsProcessed, TotalJobItems, ApexClass.Name
         FROM AsyncApexJob
         WHERE Id IN :typedIds
       ]) {

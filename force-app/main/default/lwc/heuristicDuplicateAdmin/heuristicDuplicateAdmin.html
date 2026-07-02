@@ -31,7 +31,7 @@
           type="number"
           label="Max Records"
           min="100"
-          max="5000"
+          max="400000"
           value={maxRecords}
           onchange={handleMaxRecordsChange}
         ></lightning-input>
@@ -71,16 +71,28 @@
           </div>
           <div class="metrics">
             <div class="metric"><span>Object</span><strong>{scanStatus.objectNameLabel}</strong></div>
+            <div class="metric"><span>Processing Path</span><strong>{scanStatus.processingPathLabel}</strong></div>
+            <div class="metric"><span>Current Stage</span><strong>{scanStatus.phaseLabel}</strong></div>
+            <div class="metric"><span>Active Job</span><strong>{scanStatus.asyncJobLabel}</strong></div>
+            <div class="metric"><span>Job Progress</span><strong>{scanStatus.asyncProgressLabel}</strong></div>
             <div class="metric"><span>Created</span><strong>{scanStatus.createdDateLabel}</strong></div>
             <div class="metric"><span>Started</span><strong>{scanStatus.startedAtLabel}</strong></div>
             <div class="metric"><span>Completed</span><strong>{scanStatus.completedAtLabel}</strong></div>
             <div class="metric"><span>Last Heartbeat</span><strong>{scanStatus.heartbeatLabel}</strong></div>
-            <div class="metric"><span>Processed / Total</span><strong>{scanStatus.processedRecords} / {scanStatus.totalRecords}</strong></div>
-            <div class="metric"><span>Candidate Pairs</span><strong>{scanStatus.candidatePairs}</strong></div>
-            <div class="metric"><span>Flagged Records</span><strong>{scanStatus.flaggedRecords}</strong></div>
-            <div class="metric"><span>Flagged Groups</span><strong>{scanStatus.flaggedGroups}</strong></div>
+            <div class="metric"><span>Scanned / Total Records</span><strong>{scanStatus.processedRecords} / {scanStatus.totalRecords}</strong></div>
+            <div class="metric"><span>Candidate Comparisons</span><strong>{scanStatus.candidatePairs}</strong></div>
+            <div class="metric"><span>Duplicate Records</span><strong>{scanStatus.flaggedRecords}</strong></div>
+            <div class="metric"><span>Duplicate Groups</span><strong>{scanStatus.flaggedGroups}</strong></div>
             <div class="metric"><span>Threshold</span><strong>{scanStatus.threshold}</strong></div>
             <div class="metric"><span>Max Records</span><strong>{scanStatus.maxRecords}</strong></div>
+          </div>
+          <div class="pipeline">
+            <template for:each={scanStatus.pipelineSteps} for:item="step">
+              <div key={step.key} class={step.className}>
+                <span class="pipeline-dot"></span>
+                <span>{step.label}</span>
+              </div>
+            </template>
           </div>
           <template if:true={scanStatus.errorMessage}>
             <p class="error-text">{scanStatus.errorMessage}</p>
@@ -103,7 +115,8 @@
                 <span class="scan-meta">{scan.objectNameLabel}</span>
                 <span class="scan-meta">{scan.createdDateLabel}</span>
                 <span class="scan-meta">{scan.statusLabel}</span>
-                <span class="scan-meta">Groups: {scan.flaggedGroups} | Records: {scan.flaggedRecords}</span>
+                <span class="scan-meta">{scan.phaseLabel}</span>
+                <span class="scan-meta">{scan.resultSummaryLabel}</span>
               </button>
             </template>
           </div>
